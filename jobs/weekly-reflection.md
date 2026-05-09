@@ -15,7 +15,7 @@ When judging what to suggest for the new week's `This week` section:
 1. Review what weekly rollover already carried forward into the new week's `This week` list, including any `#rollover` tasks.
 2. Do not suggest tasks that are already present in the new week's `This week` list or are clearly already scheduled under a day header.
 3. Treat rollover tasks and already-scheduled tasks as the baseline workload for the week before suggesting anything extra.
-4. If the `get_calendar_events` tool is available, check the next 7 days of calendar events and use them to judge how much real capacity the week has and whether any monthly task would be especially useful before an upcoming event.
+4. If calendar event lookup tools are available, use the `calendar` skill to check the next 7 days of calendar events and use them to judge how much real capacity the week has and whether any monthly task would be especially useful before an upcoming event.
 5. Be conservative. Only suggest tasks to add when they seem genuinely useful this week because they are time-sensitive, support a scheduled event, unblock something else, or clearly align with the monthly note's current priorities.
 6. Do not pad the list with generic maintenance or low-priority ideas just because there is room.
 

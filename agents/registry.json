@@ -1,31 +1,7 @@
 {
-  "parentAgentId": "parent",
-  "agents": [
-    {
-      "id": "parent",
-      "description": "Routes prompts to specialized subagents using the Claude Agent SDK Agent tool",
-      "botConfigPath": "parent/BOT.md"
-    },
-    {
-      "id": "journal-ingest",
-      "description": "Logs notes, tasks, moods, and journal updates into the Obsidian workflow",
-      "botConfigPath": "journal-ingest/BOT.md",
-      "promptsDir": "journal-ingest/prompts"
-    },
-    {
-      "id": "calendar-integration",
-      "description": "Handles calendar lookups, schedule questions, and event summaries",
-      "botConfigPath": "calendar-integration/BOT.md"
-    },
-    {
-      "id": "task-review",
-      "description": "Read-only vault agent for task aggregation, status checks, and rollover analysis",
-      "botConfigPath": "task-review/BOT.md"
-    },
-    {
-      "id": "strava-integration",
-      "description": "Fetches Strava activities, computes fitness stats, and prepares workout journal summaries",
-      "botConfigPath": "strava-integration/BOT.md"
-    }
-  ]
+  "parent": {
+    "id": "parent",
+    "description": "Telegram-facing assistant that handles domain work directly through native skills",
+    "botConfigPath": "parent/BOT.md"
+  }
 }

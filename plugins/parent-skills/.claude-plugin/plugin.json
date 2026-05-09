@@ -1,0 +1,4 @@
+{
+  "name": "parent-skills",
+  "description": "Native Claude Agent SDK skills for the Telegram-facing parent assistant."
+}

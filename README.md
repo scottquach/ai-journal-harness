@@ -85,7 +85,7 @@ Run claude code in the directory and type `/setup` and claude will walkthrough e
 ## Running
 
 ```bash
-node index.js
+npm start
 ```
 
 Requires [Claude Code CLI](https://github.com/anthropics/claude-code) to be installed and authenticated.

@@ -4,11 +4,11 @@ cron: '30 7 * * *'
 telegram: true
 ---
 
-In parallel:
+Gather this context using the loaded skills directly:
 
-1. Check today's day header in the current weekly note for unchecked tasks (delegate to `task-review`).
-2. If the `get_calendar_events` tool is available, check today's calendar events using `start_date=today` and `end_date=today` (delegate to `calendar-integration`).
-3. Ask `task-review` for **thread recall**: scan the current weekly note and the previous weekly note for unfulfilled intentions ("I should X", "I want to X", "I need to X", "I'd like to X", "X would be nice/cool") from the last 7 days that never became a task and aren't already in `This week` or any day-header task list. Return at most 2 threads, only if they seem clearly worth surfacing. If nothing stands out, return nothing.
+1. Use the `task-review` skill to check today's day header in the current weekly note for unchecked tasks.
+2. If calendar event lookup tools are available, use the `calendar` skill to check today's calendar events. Prefer the concrete `YYYY-MM-DD` date from the context line for both start and end; if the tool explicitly supports relative dates, `today` is acceptable.
+3. Use the `task-review` skill for **thread recall**: scan the current weekly note and the previous weekly note for unfulfilled intentions ("I should X", "I want to X", "I need to X", "I'd like to X", "X would be nice/cool") from the last 7 days that never became a task and aren't already in `This week` or any day-header task list. Return at most 2 threads, only if they seem clearly worth surfacing. If nothing stands out, return nothing.
 
 If there are no unchecked tasks for today, no calendar events for today, and no recall threads, output exactly: `[SKIP]`
 
