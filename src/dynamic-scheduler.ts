@@ -39,6 +39,7 @@ type DynamicSchedulerDeps = {
     runParentAgent: RunParentAgent | null;
     defaultChatId?: string;
     persistPath: string;
+    persistMirrorPath?: string;
     timezone: string;
     cron?: CronLike;
 };
@@ -116,13 +117,20 @@ function createDynamicScheduler(deps: DynamicSchedulerDeps): DynamicScheduler {
     // deps.runParentAgent may be null at construction time — injected later
     const tasks = new Map<string, { record: DynamicScheduleRecord; cronTask: CronTaskLike }>();
 
+    function _writeJsonFile(path: string, records: DynamicScheduleRecord[]): void {
+        const dir = dirname(path);
+        mkdirSync(dir, { recursive: true });
+        const tmp = `${path}.tmp`;
+        writeFileSync(tmp, JSON.stringify(records, null, 2), 'utf8');
+        renameSync(tmp, path);
+    }
+
     function _persist(): void {
         const records = [...tasks.values()].map((t) => t.record);
-        const dir = dirname(deps.persistPath);
-        mkdirSync(dir, { recursive: true });
-        const tmp = `${deps.persistPath}.tmp`;
-        writeFileSync(tmp, JSON.stringify(records, null, 2), 'utf8');
-        renameSync(tmp, deps.persistPath);
+        _writeJsonFile(deps.persistPath, records);
+        if (deps.persistMirrorPath) {
+            _writeJsonFile(deps.persistMirrorPath, records);
+        }
     }
 
     function _activate(record: DynamicScheduleRecord): void {

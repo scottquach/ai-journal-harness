@@ -24,6 +24,7 @@ const schedulerDeps: DynamicSchedulerDeps = {
     runParentAgent: null,
     defaultChatId: process.env.DEFAULT_CHAT_ID,
     persistPath: join(__dirname, 'schedules', 'dynamic-schedules.json'),
+    persistMirrorPath: join(__dirname, 'memory', 'vault', 'schedules', 'dynamic-schedules.json'),
     timezone: process.env.BOT_TIMEZONE ?? 'America/Chicago',
 };
 const dynamicScheduler = createDynamicScheduler(schedulerDeps);
