@@ -235,7 +235,7 @@ test('createParentOptions grants Composio Google Calendar tools when Composio is
     });
 
     assert.ok(options.agents.parent.skills.includes('calendar'));
-    assert.ok(options.allowedTools.includes('mcp__composio__GOOGLECALENDAR_*'));
+    assert.ok(options.allowedTools.includes('mcp__composio__*'));
     assert.equal(options.allowedTools.includes('mcp__calendar__get_calendar_events'), false);
 });
 

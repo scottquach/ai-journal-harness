@@ -2,7 +2,7 @@
 name: calendar
 description: Use for calendar lookups, schedule questions, availability checks, event summaries, and calendar event mutations when supported.
 tools:
-  - mcp__composio__GOOGLECALENDAR_*
+  - mcp__composio__*
   - mcp__calendar__get_calendar_events
 ---
 
@@ -35,7 +35,7 @@ When the user asks to add a calendar event:
 6. Do not add a Google Meet link unless the user explicitly asks for one.
 7. Confirm the event title, date, and time after creation.
 
-Calendar MCP tools appear directly in your active tool list when the server is connected — a second Skill invocation will not make them visible. If no `mcp__composio__GOOGLECALENDAR_*` tools appear in your tool list when this skill runs, report immediately that calendar writes are unavailable in this session and stop. The `mcp__calendar__get_calendar_events` fallback is read-only.
+Calendar MCP tools appear directly in your active tool list when the server is connected — a second Skill invocation will not make them visible. If no `mcp__composio__*` tools appear in your tool list when this skill runs, report immediately that calendar writes are unavailable in this session and stop. The `mcp__calendar__get_calendar_events` fallback is read-only.
 
 ## User Context
 

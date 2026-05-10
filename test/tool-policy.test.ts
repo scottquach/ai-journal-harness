@@ -5,21 +5,21 @@ import { availableSkills, parseToolsFromFrontmatter, toolsForSkills, type SkillP
 const MOCK_TOOLS_BY_SKILL: SkillPolicy = {
     journal: ['Read', 'Write', 'Edit'],
     'task-review': ['Read'],
-    calendar: ['mcp__composio__GOOGLECALENDAR_*', 'mcp__calendar__get_calendar_events'],
+    calendar: ['mcp__composio__*', 'mcp__calendar__get_calendar_events'],
 };
 
 test('toolsForSkills scopes tools to selected skills', () => {
     assert.deepEqual(toolsForSkills(['journal'], MOCK_TOOLS_BY_SKILL), ['Skill', 'Read', 'Write', 'Edit']);
     assert.deepEqual(
         toolsForSkills(['calendar'], MOCK_TOOLS_BY_SKILL),
-        ['Skill', 'mcp__composio__GOOGLECALENDAR_*', 'mcp__calendar__get_calendar_events'],
+        ['Skill', 'mcp__composio__*', 'mcp__calendar__get_calendar_events'],
     );
 });
 
 test('toolsForSkills filters MCP grants to configured servers when provided', () => {
     assert.deepEqual(
         toolsForSkills(['calendar'], MOCK_TOOLS_BY_SKILL, { mcpServers: { composio: { type: 'http' } } }),
-        ['Skill', 'mcp__composio__GOOGLECALENDAR_*'],
+        ['Skill', 'mcp__composio__*'],
     );
     assert.deepEqual(
         toolsForSkills(['calendar'], MOCK_TOOLS_BY_SKILL, { mcpServers: { calendar: { type: 'stdio' } } }),

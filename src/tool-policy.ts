@@ -51,8 +51,9 @@ function toolIsAvailable(toolName: string, availableMcpServers?: Set<string>): b
  * this session, based on which MCP servers are configured.
  *
  * Non-MCP tools such as Read/Write/Edit are assumed to be available through
- * Claude Code itself. MCP-backed skills are omitted unless every referenced
- * server is configured.
+ * Claude Code itself. MCP-backed skills are omitted unless at least one
+ * referenced server is configured; tool grants are filtered later to the
+ * servers actually present for this run.
  *
  * @param {Record<string, string[]>} toolsBySkill - Map of skill name → tool grants.
  * @param {{ mcpServers?: Record<string, unknown> }} options
