@@ -51,14 +51,17 @@ type ParentAgentOptions = {
     cwd: string;
     additionalDirectories: string[];
     agent: string;
-    agents: Record<string, {
-        description: string;
-        model: string;
-        prompt: string;
-        skills: string[];
-        tools?: string[];
-        mcpServers?: McpServers;
-    }>;
+    agents: Record<
+        string,
+        {
+            description: string;
+            model: string;
+            prompt: string;
+            skills: string[];
+            tools?: string[];
+            mcpServers?: McpServers;
+        }
+    >;
     allowedTools: string[];
     tools: string[];
     allowDangerouslySkipPermissions: boolean;
@@ -84,7 +87,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 function getErrorStack(error: unknown): string {
-    return error instanceof Error ? error.stack ?? '' : '';
+    return error instanceof Error ? (error.stack ?? '') : '';
 }
 
 function discoverSkillPolicy(pluginPath: string): Record<string, string[]> {
@@ -103,7 +106,7 @@ function discoverSkillPolicy(pluginPath: string): Record<string, string[]> {
 
 const SKILL_POLICY = discoverSkillPolicy(parentSkillsPluginPath);
 const PARENT_SKILLS = Object.freeze(Object.keys(SKILL_POLICY));
-const PARENT_BASE_TOOLS = Object.freeze(['Read', 'Glob', 'Grep', 'LS']);
+const PARENT_BASE_TOOLS = Object.freeze(['Read', 'Glob', 'Grep', 'LS', 'mcp__claude_ai*']);
 
 const c = {
     reset: '\x1b[0m',
@@ -381,11 +384,7 @@ type Session = {
     dead: boolean;
 };
 
-function createSession(
-    queryImpl: QueryFn,
-    options: ParentAgentOptions,
-    initialLogger: ExecutionLogger,
-): Session {
+function createSession(queryImpl: QueryFn, options: ParentAgentOptions, initialLogger: ExecutionLogger): Session {
     const channel = createInputChannel<any>();
     const loadedSkills = options.agents[options.agent].skills;
     const session: Session = {
@@ -429,16 +428,14 @@ function createSession(
     return session;
 }
 
-async function runOnSession(
-    session: Session,
-    promptText: string,
-    executionLogger: ExecutionLogger,
-): Promise<string> {
+async function runOnSession(session: Session, promptText: string, executionLogger: ExecutionLogger): Promise<string> {
     if (session.dead) throw new Error('session is dead');
 
     const prev = session.mutex;
     let release!: () => void;
-    session.mutex = new Promise<void>((r) => { release = r; });
+    session.mutex = new Promise<void>((r) => {
+        release = r;
+    });
     await prev;
 
     try {
@@ -491,10 +488,16 @@ function shouldPersistSession(source: string | undefined, chatId: string | undef
     return source === 'telegram' && !!chatId;
 }
 
-function createParentAgentRunner({ parent, mcpServers, queryFn, executionLogPath }: ParentRunnerFactoryInput): ParentRunner {
+function createParentAgentRunner({
+    parent,
+    mcpServers,
+    queryFn,
+    executionLogPath,
+}: ParentRunnerFactoryInput): ParentRunner {
     const claudePath = process.env.CLAUDE_PATH ?? 'claude';
     const queryImpl: QueryFn = queryFn ?? (query as unknown as QueryFn);
-    const logPath = executionLogPath ?? process.env.CLAUDE_EXECUTION_LOG_PATH ?? resolve(__dirname, '../logs/execution.log');
+    const logPath =
+        executionLogPath ?? process.env.CLAUDE_EXECUTION_LOG_PATH ?? resolve(__dirname, '../logs/execution.log');
     const sessionsByChatId = new Map<string, Session>();
 
     function getOrCreateSession(chatId: string, executionLogger: ExecutionLogger): Session {
