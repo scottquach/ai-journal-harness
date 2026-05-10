@@ -2,13 +2,6 @@
 
 Use `vault/` as the synced Obsidian vault. The `vault/` folder is gitignored; this README and `template_memory.md` are tracked conventions for initializing it.
 
-## Files
-
-- `vault/memory.md` - one-line facts, preferences, references, goals, and other assistant memory.
-- `Jobs/` - longer notes for scheduled jobs or active state.
-- `Templates/` - reusable note templates.
-- `Dashboards/` - generated or hand-maintained views.
-
 ## Memory Format
 
 Write one memory per line:
