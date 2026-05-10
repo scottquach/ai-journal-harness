@@ -16,10 +16,12 @@ Use this skill when the user asks to remember something, update memory, recall s
 Memory lives in `${PROJECT_ROOT}/memory/vault`.
 
 - `memory.md` is the compact line-oriented memory log.
-- `README.md` documents the memory format and tags.
+- `../README.md` documents the memory format and tags.
 - Longer state, scheduled jobs, or dashboards can live in nearby notes, but `memory.md` is the index for durable memory.
 
-Read `memory/vault/README.md` before changing the memory format. Read `memory/vault/memory.md` before answering memory recall questions or deciding whether a new entry supersedes an old one.
+The `memory/vault` directory is gitignored because it may be synced to an external Obsidian vault. If `memory/vault/memory.md` does not exist yet, create it before appending memory entries.
+
+Read `memory/README.md` before changing the memory format. Read `memory/vault/memory.md` before answering memory recall questions or deciding whether a new entry supersedes an old one.
 
 ## Memory Classes
 

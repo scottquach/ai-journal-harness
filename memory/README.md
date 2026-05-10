@@ -1,10 +1,10 @@
 # Memory Vault
 
-Open this folder as an Obsidian vault. Use `memory.md` as the compact memory log.
+Use `vault/` as the synced Obsidian vault. The `vault/` folder is gitignored; this README and `template_memory.md` are tracked conventions for initializing it.
 
 ## Files
 
-- `memory.md` - one-line facts, preferences, references, goals, and other assistant memory.
+- `vault/memory.md` - one-line facts, preferences, references, goals, and other assistant memory.
 - `Jobs/` - longer notes for scheduled jobs or active state.
 - `Templates/` - reusable note templates.
 - `Dashboards/` - generated or hand-maintained views.
@@ -43,4 +43,4 @@ Example:
 - Keep every line independently understandable.
 - Use lowercase kebab-case tags.
 - Review `#memory/short` entries periodically and clear or supersede stale ones.
-- Put long explanations in separate notes and reference them from `memory.md`.
+- Put long explanations in separate notes and reference them from `vault/memory.md`.

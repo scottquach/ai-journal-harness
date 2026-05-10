@@ -2,3 +2,4 @@ conversations/*
 logs/*
 node_modules/*
 .env
+/memory/vault/
