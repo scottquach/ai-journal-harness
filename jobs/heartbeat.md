@@ -14,7 +14,7 @@ Output contract:
 
 Use the loaded skills directly:
 
-- `task-review`: What unchecked tasks exist for today? What forgotten intentions exist from the last 14 days (thread recall)?
+- `task-review`: What unchecked tasks exist for today? Are there explicit task entries that are time-sensitive, stale, or relevant to nearby events?
 - `calendar`: What events are coming up in the next 3 hours?
 
 Also read the conversation context (provided above): find the most recent message timestamp `[HH:MM]` to determine how long ago the user was last active.
@@ -27,13 +27,13 @@ Output exactly `[SKIP]` immediately if:
 
 ## Step 3: Make a holistic judgment
 
-With the full context — tasks, calendar events, forgotten intentions, time since last activity — make a single open judgment call:
+With the full context — tasks, calendar events, and time since last activity — make a single open judgment call:
 
 **Is there anything genuinely worth surfacing right now?**
 
 You have full latitude to connect dots across the data. Examples of good signals:
-- An event is coming up in 60–120 minutes and there are open tasks or recent journal notes relevant to it (not limited to meetings — a run, an errand, anything)
-- A forgotten intention is old enough (7+ days) and hasn't been nudged recently
+- An event is coming up in 60–120 minutes and there are open tasks relevant to it (not limited to meetings — a run, an errand, anything)
+- An explicit task entry is stale, time-sensitive, or newly relevant
 - Any other connection that a thoughtful assistant would notice and consider worth a brief mention
 
 **Default to silence.** Only surface something if it clears a high bar — the kind of thing where a person would say "glad someone told me that."

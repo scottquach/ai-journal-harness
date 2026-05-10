@@ -108,6 +108,7 @@ function discoverSkillPolicy(pluginPath: string): Record<string, string[]> {
 
 const SKILL_POLICY = discoverSkillPolicy(parentSkillsPluginPath);
 const PARENT_SKILLS = Object.freeze(Object.keys(SKILL_POLICY));
+const PARENT_BASE_TOOLS = Object.freeze(['Read', 'Glob', 'Grep', 'LS']);
 
 const c = {
     reset: '\x1b[0m',
@@ -260,7 +261,7 @@ function resolveMcpServers(mcpServers?: McpServers): Record<string, McpServerCon
 function createParentOptions({ parent, mcpServers }: ParentOptionsInput): ParentAgentOptions {
     const resolvedMcpServers = resolveMcpServers(mcpServers);
     const activeSkills = availableSkills(SKILL_POLICY, { mcpServers: resolvedMcpServers });
-    const allowedTools = toolsForSkills(activeSkills, SKILL_POLICY);
+    const allowedTools = toolsForSkills(activeSkills, SKILL_POLICY, { baseTools: [...PARENT_BASE_TOOLS] });
     const builtInTools = allowedTools.filter((toolName) => !toolName.startsWith('mcp__'));
 
     return {
@@ -406,6 +407,7 @@ function createParentAgentRunner({ parent, mcpServers, queryFn, executionLogPath
 
 export {
     PARENT_SKILLS,
+    PARENT_BASE_TOOLS,
     SKILL_POLICY,
     buildInvocationPrompt,
     createParentAgentRunner,

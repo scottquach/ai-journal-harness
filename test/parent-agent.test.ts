@@ -6,6 +6,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
     PARENT_SKILLS,
+    PARENT_BASE_TOOLS,
     SKILL_POLICY,
     buildInvocationPrompt,
     createParentAgentRunner,
@@ -58,9 +59,12 @@ test('createParentOptions uses native parent skills and disables subagent delega
     assert.equal(options.agent, 'parent');
     // Only calendar-backed and built-in skills should remain active here.
     assert.deepEqual(options.allowedTools, [
+        'Read',
+        'Glob',
+        'Grep',
+        'LS',
         'Skill',
         'mcp__calendar__*',
-        'Read',
         'Write',
         'Edit',
     ]);
@@ -75,7 +79,8 @@ test('createParentOptions uses native parent skills and disables subagent delega
     assert.equal(options.agents.parent.prompt, 'Parent instructions.');
     assert.equal(options.agents.parent.tools, undefined);
     assert.equal(options.agents.parent.mcpServers, undefined);
-    assert.deepEqual(options.tools, ['Skill', 'Read', 'Write', 'Edit']);
+    assert.deepEqual(options.tools, ['Read', 'Glob', 'Grep', 'LS', 'Skill', 'Write', 'Edit']);
+    assert.deepEqual(PARENT_BASE_TOOLS, ['Read', 'Glob', 'Grep', 'LS']);
     assert.deepEqual(
         options.plugins.map((plugin) => plugin.path),
         [
@@ -269,8 +274,11 @@ test('createParentOptions omits skills whose MCP servers are unavailable', () =>
 
     assert.deepEqual(options.agents.parent.skills, ['journal', 'memory', 'scheduler', 'task-review']);
     assert.deepEqual(options.allowedTools, [
-        'Skill',
         'Read',
+        'Glob',
+        'Grep',
+        'LS',
+        'Skill',
         'Write',
         'Edit',
         'mcp__scheduler__schedule_task',
@@ -278,7 +286,7 @@ test('createParentOptions omits skills whose MCP servers are unavailable', () =>
         'mcp__scheduler__list_schedules',
         'mcp__scheduler__cancel_schedule',
     ]);
-    assert.deepEqual(options.tools, ['Skill', 'Read', 'Write', 'Edit']);
+    assert.deepEqual(options.tools, ['Read', 'Glob', 'Grep', 'LS', 'Skill', 'Write', 'Edit']);
 });
 
 test('parent skill plugin exposes every native skill with matching frontmatter', () => {
