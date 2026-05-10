@@ -27,10 +27,10 @@ function makeFakeCron() {
     };
 }
 
-test('dynamic scheduler mirrors persisted schedules to the memory vault', () => {
+test('dynamic scheduler mirrors persisted schedules to the agent folder', () => {
     const tempDirectory = mkdtempSync(join(tmpdir(), 'dynamic-scheduler-test-'));
     const persistPath = join(tempDirectory, 'schedules', 'dynamic-schedules.json');
-    const persistMirrorPath = join(tempDirectory, 'memory', 'vault', 'schedules', 'dynamic-schedules.json');
+    const persistMirrorPath = join(tempDirectory, 'agent', 'dynamic-schedules.md');
 
     try {
         const scheduler = createDynamicScheduler({
@@ -48,14 +48,18 @@ test('dynamic scheduler mirrors persisted schedules to the memory vault', () => 
             schedule: '0 9 * * *',
         });
 
-        assert.deepEqual(
-            JSON.parse(readFileSync(persistMirrorPath, 'utf8')),
-            JSON.parse(readFileSync(persistPath, 'utf8')),
-        );
+        const persisted = JSON.parse(readFileSync(persistPath, 'utf8'));
+        const mirrored = readFileSync(persistMirrorPath, 'utf8');
+
+        assert.equal(persisted[0].id, id);
+        assert.match(mirrored, /# Dynamic Schedules/);
+        assert.match(mirrored, /Mirror Check/);
+        assert.match(mirrored, /Visible from Obsidian/);
 
         scheduler.cancelSchedule(id);
 
-        assert.deepEqual(JSON.parse(readFileSync(persistMirrorPath, 'utf8')), []);
+        assert.deepEqual(JSON.parse(readFileSync(persistPath, 'utf8')), []);
+        assert.match(readFileSync(persistMirrorPath, 'utf8'), /No active dynamic schedules\./);
     } finally {
         rmSync(tempDirectory, { force: true, recursive: true });
     }

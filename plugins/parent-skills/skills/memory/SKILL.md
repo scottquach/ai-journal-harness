@@ -13,15 +13,16 @@ Use this skill when the user asks to remember something, update memory, recall s
 
 ## Files
 
-Memory lives in `${PROJECT_ROOT}/memory/vault`.
+Memory lives in the configured Obsidian vault at `${VAULT_PATH}/agent`.
 
-- `memory.md` is the compact line-oriented memory log.
-- `../README.md` documents the memory format and tags.
-- Longer state, scheduled jobs, or dashboards can live in nearby notes, but `memory.md` is the index for durable memory.
+- `${VAULT_PATH}/agent/memory.md` is the compact line-oriented memory log.
+- `${PROJECT_ROOT}/memory/README.md` documents the memory format and tags.
+- `${VAULT_PATH}/agent/dynamic-schedules.md` is maintained by the scheduler as a read-only visibility file for active dynamic schedules.
+- Longer state, scheduled jobs, or dashboards can live in nearby notes under `${VAULT_PATH}/agent`, but `memory.md` is the index for durable memory.
 
-The `memory/vault` directory is gitignored because it may be synced to an external Obsidian vault. If `memory/vault/memory.md` does not exist yet, create it before appending memory entries.
+`${VAULT_PATH}` is the real Obsidian vault from `.env`; do not use a repo-local memory directory as the live memory store. If `${VAULT_PATH}/agent/memory.md` does not exist yet, create the `agent` directory and file before appending memory entries.
 
-Read `memory/README.md` before changing the memory format. Read `memory/vault/memory.md` before answering memory recall questions or deciding whether a new entry supersedes an old one.
+Read `${PROJECT_ROOT}/memory/README.md` before changing the memory format. Read `${VAULT_PATH}/agent/memory.md` before answering memory recall questions or deciding whether a new entry supersedes an old one.
 
 ## Memory Classes
 

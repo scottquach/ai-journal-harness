@@ -113,6 +113,47 @@ function parseSchedule(schedule: string, timezone: string): ScheduleParseResult 
     throw new Error(`Invalid schedule: must be a cron expression or ISO 8601 datetime, got: "${schedule}"`);
 }
 
+function escapeMarkdownCell(value: string): string {
+    return value.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+}
+
+function renderScheduleMarkdown(records: DynamicScheduleRecord[], updatedAt: string): string {
+    const lines = [
+        '# Dynamic Schedules',
+        '',
+        `Last updated: ${updatedAt}`,
+        '',
+    ];
+
+    if (records.length === 0) {
+        lines.push('No active dynamic schedules.', '');
+        return lines.join('\n');
+    }
+
+    lines.push(
+        '| Label | Mode | Schedule | One-shot | Created | ID | Preview |',
+        '|---|---|---|---|---|---|---|',
+    );
+
+    for (const record of records) {
+        const preview = record.mode === 'message'
+            ? (record.message ?? '').slice(0, 120)
+            : (record.prompt ?? '').slice(0, 120);
+        lines.push([
+            escapeMarkdownCell(record.label ?? record.id),
+            record.mode,
+            escapeMarkdownCell(record.schedule),
+            record.isOneShot ? 'yes' : 'no',
+            record.createdAt,
+            record.id,
+            escapeMarkdownCell(preview),
+        ].join(' | ').replace(/^/, '| ').replace(/$/, ' |'));
+    }
+
+    lines.push('');
+    return lines.join('\n');
+}
+
 function createDynamicScheduler(deps: DynamicSchedulerDeps): DynamicScheduler {
     // deps.runParentAgent may be null at construction time — injected later
     const tasks = new Map<string, { record: DynamicScheduleRecord; cronTask: CronTaskLike }>();
@@ -129,7 +170,12 @@ function createDynamicScheduler(deps: DynamicSchedulerDeps): DynamicScheduler {
         const records = [...tasks.values()].map((t) => t.record);
         _writeJsonFile(deps.persistPath, records);
         if (deps.persistMirrorPath) {
-            _writeJsonFile(deps.persistMirrorPath, records);
+            const updatedAt = new Date().toISOString();
+            const dir = dirname(deps.persistMirrorPath);
+            mkdirSync(dir, { recursive: true });
+            const tmp = `${deps.persistMirrorPath}.tmp`;
+            writeFileSync(tmp, renderScheduleMarkdown(records, updatedAt), 'utf8');
+            renameSync(tmp, deps.persistMirrorPath);
         }
     }
 

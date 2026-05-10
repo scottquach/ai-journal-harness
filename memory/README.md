@@ -1,6 +1,17 @@
-# Memory Vault
+# Memory
 
-Use `vault/` as the synced Obsidian vault. The `vault/` folder is gitignored; this README and `template_memory.md` are tracked conventions for initializing it.
+Use the configured Obsidian vault from `.env`:
+
+```text
+${VAULT_PATH}/agent/
+```
+
+This repository's `memory/` folder only tracks conventions and templates. The live synced files should be created in `${VAULT_PATH}/agent`, not in a repo-local memory folder.
+
+Expected files:
+
+- `${VAULT_PATH}/agent/memory.md` - compact line-oriented assistant memory.
+- `${VAULT_PATH}/agent/dynamic-schedules.md` - read-only scheduler visibility file written by the dynamic scheduler.
 
 ## Memory Format
 
@@ -36,4 +47,5 @@ Example:
 - Keep every line independently understandable.
 - Use lowercase kebab-case tags.
 - Review `#memory/short` entries periodically and clear or supersede stale ones.
-- Put long explanations in separate notes and reference them from `vault/memory.md`.
+- Put long explanations in separate notes under `${VAULT_PATH}/agent` and reference them from `${VAULT_PATH}/agent/memory.md`.
+- Treat scheduler-generated files such as `dynamic-schedules.md` as read-only visibility files; change schedules through the scheduler tools instead.
