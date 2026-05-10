@@ -1,4 +1,4 @@
-# claude-librarian
+# Self-hosted journal assistant
 
 I wanted an easy way to stream my daily thoughts into my weekly/daily markdown journal (Obsidian).
 
@@ -6,7 +6,9 @@ This projects provides a telegram bot that can handle both text + voice memos to
 
 jobs/ can be used to define proactive jobs for claude to run such as weekly reviews, checks against your monthly/yearly goals, moving tasks when the next day starts, etc.
 
-It also supports basic retrieval activities and appending to other notes in your vault
+The assistant also has the ability to dynamically schedule it's own jobs on user request or based in it's own insights.
+
+The whole project can be fully hosted locally or on your own VPC.
 
 ## What it does
 
