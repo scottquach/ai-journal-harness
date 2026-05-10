@@ -106,7 +106,13 @@ function discoverSkillPolicy(pluginPath: string): Record<string, string[]> {
 
 const SKILL_POLICY = discoverSkillPolicy(parentSkillsPluginPath);
 const PARENT_SKILLS = Object.freeze(Object.keys(SKILL_POLICY));
-const PARENT_BASE_TOOLS = Object.freeze(['Read', 'Glob', 'Grep', 'LS', 'mcp__claude_ai*']);
+const PARENT_BASE_TOOLS = Object.freeze([
+    'Read',
+    'Glob',
+    'Grep',
+    'LS',
+    'mcp__claude_ai_Google_Calendar__*',
+]);
 
 const c = {
     reset: '\x1b[0m',
