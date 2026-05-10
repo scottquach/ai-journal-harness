@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { availableSkills, parseToolsFromFrontmatter, toolsForSkills, type SkillPolicy } from './tool-policy.js';
+import { availableSkills, parseToolsFromFrontmatter, toolsForSkills, type SkillPolicy } from '../src/tool-policy.js';
 
 const MOCK_TOOLS_BY_SKILL: SkillPolicy = {
     journal: ['Read', 'Write', 'Edit'],

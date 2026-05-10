@@ -4,7 +4,7 @@ import { appendFileSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentRegistry } from './agent-registry.js';
+import type { BotConfig } from './bot-config-loader.js';
 import { availableSkills, parseToolsFromFrontmatter, toolsForSkills } from './tool-policy.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -35,8 +35,12 @@ type ParentInvocationResult = {
 
 type ParentRunner = (input?: ParentInvocationInput) => Promise<ParentInvocationResult>;
 
+type ParentConfig = BotConfig & {
+    id: string;
+};
+
 type ParentOptionsInput = {
-    registry: AgentRegistry;
+    parent: ParentConfig;
     mcpServers?: McpServers;
 };
 
@@ -253,9 +257,8 @@ function resolveMcpServers(mcpServers?: McpServers): Record<string, McpServerCon
     return resolved;
 }
 
-function createParentOptions({ registry, mcpServers }: ParentOptionsInput): ParentAgentOptions {
+function createParentOptions({ parent, mcpServers }: ParentOptionsInput): ParentAgentOptions {
     const resolvedMcpServers = resolveMcpServers(mcpServers);
-    const parent = registry.parent;
     const activeSkills = availableSkills(SKILL_POLICY, { mcpServers: resolvedMcpServers });
     const allowedTools = toolsForSkills(activeSkills, SKILL_POLICY);
     const builtInTools = allowedTools.filter((toolName) => !toolName.startsWith('mcp__'));
@@ -263,8 +266,8 @@ function createParentOptions({ registry, mcpServers }: ParentOptionsInput): Pare
     return {
         pathToClaudeCodeExecutable: process.env.CLAUDE_PATH ?? 'claude',
         env: process.env,
-        cwd: registry.directories[0],
-        additionalDirectories: registry.directories.slice(1),
+        cwd: parent.directories[0],
+        additionalDirectories: parent.directories.slice(1),
         agent: parent.id,
         agents: {
             [parent.id]: {
@@ -321,7 +324,7 @@ function summarizeStreamEvent(message: any): string {
     return message.type ?? 'unknown';
 }
 
-function createParentAgentRunner({ registry, mcpServers, queryFn, executionLogPath }: ParentRunnerFactoryInput): ParentRunner {
+function createParentAgentRunner({ parent, mcpServers, queryFn, executionLogPath }: ParentRunnerFactoryInput): ParentRunner {
     const claudePath = process.env.CLAUDE_PATH ?? 'claude';
     const queryImpl: QueryFn = queryFn ?? (query as unknown as QueryFn);
     const logPath = executionLogPath ?? process.env.CLAUDE_EXECUTION_LOG_PATH ?? resolve(__dirname, '../logs/execution.log');
@@ -340,7 +343,7 @@ function createParentAgentRunner({ registry, mcpServers, queryFn, executionLogPa
         await ensureClaudeExecutableCheck(claudePath);
         console.log(`[claude] preflight complete durationMs=${Date.now() - startedAt}`);
 
-        const options = createParentOptions({ registry, mcpServers });
+        const options = createParentOptions({ parent, mcpServers });
         const loadedSkills = availableSkills(SKILL_POLICY, { mcpServers: options.mcpServers });
         const finalPrompt = buildInvocationPrompt({ chatId, jobName, prompt, source });
         let result: string | null = null;
@@ -412,6 +415,7 @@ export {
 };
 export type {
     McpServers,
+    ParentConfig,
     ParentAgentOptions,
     ParentInvocationInput,
     ParentInvocationResult,

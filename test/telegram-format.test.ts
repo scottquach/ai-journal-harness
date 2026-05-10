@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { markdownToTelegramHtml } from './telegram-format.js';
+import { markdownToTelegramHtml } from '../src/telegram-format.js';
 
 test('passes plain text through unchanged', () => {
   assert.equal(markdownToTelegramHtml('hello world'), 'hello world');

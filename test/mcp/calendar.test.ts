@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import ical from 'node-ical';
-import { extractEvents, fetchCalendarEvents } from './calendar.js';
+import { extractEvents, fetchCalendarEvents } from '../../src/mcp/calendar.js';
 
 const originalBotTimezone = process.env.BOT_TIMEZONE;
 

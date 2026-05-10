@@ -12,21 +12,21 @@ import {
     createParentOptions,
     formatExecutionLogEvent,
     summarizeStreamEvent,
-} from './parent-agent.js';
-import type { AgentRegistry } from './agent-registry.js';
-import { availableSkills } from './tool-policy.js';
+} from '../src/parent-agent.js';
+import type { ParentConfig } from '../src/parent-agent.js';
+import { availableSkills } from '../src/tool-policy.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-function makeRegistry(): AgentRegistry {
+function makeParent(): ParentConfig {
     return {
+        id: 'parent',
+        name: 'parent',
+        description: 'Telegram-facing parent assistant',
+        model: 'haiku',
+        tools: [],
         directories: ['/vault', '/shared'],
-        parent: {
-            id: 'parent',
-            model: 'haiku',
-            tools: [],
-            systemPrompt: 'Parent instructions.',
-        },
+        systemPrompt: 'Parent instructions.',
     };
 }
 
@@ -51,7 +51,7 @@ test('buildInvocationPrompt includes source metadata', () => {
 
 test('createParentOptions uses native parent skills and disables subagent delegation', () => {
     const options = createParentOptions({
-        registry: makeRegistry(),
+        parent: makeParent(),
         mcpServers: { calendar: { type: 'stdio' } },
     });
 
@@ -99,7 +99,7 @@ test('createParentAgentRunner sends prompt through native-skilled parent without
     };
 
     const runParentAgent = createParentAgentRunner({
-        registry: makeRegistry(),
+        parent: makeParent(),
         mcpServers: { calendar: { type: 'stdio' } },
         queryFn,
         executionLogPath: makeExecutionLogPath(),
@@ -139,7 +139,7 @@ test('createParentAgentRunner creates fresh SDK MCP servers for each invocation'
     };
 
     const runParentAgent = createParentAgentRunner({
-        registry: makeRegistry(),
+        parent: makeParent(),
         mcpServers: {
             calendar: () => ({
                 type: 'sdk',
@@ -174,7 +174,7 @@ test('createParentAgentRunner logs lifecycle timing around the query stream', as
     };
 
     const runParentAgent = createParentAgentRunner({
-        registry: makeRegistry(),
+        parent: makeParent(),
         mcpServers: { calendar: { type: 'stdio' } },
         queryFn,
         executionLogPath: makeExecutionLogPath(),
@@ -235,7 +235,7 @@ test('createParentAgentRunner appends thoughts and stream details to an executio
     };
 
     const runParentAgent = createParentAgentRunner({
-        registry: makeRegistry(),
+        parent: makeParent(),
         mcpServers: { calendar: { type: 'stdio' } },
         queryFn,
         executionLogPath: logPath,
@@ -263,11 +263,11 @@ test('createParentAgentRunner appends thoughts and stream details to an executio
 
 test('createParentOptions omits skills whose MCP servers are unavailable', () => {
     const options = createParentOptions({
-        registry: makeRegistry(),
+        parent: makeParent(),
         mcpServers: { scheduler: { type: 'stdio' } },
     });
 
-    assert.deepEqual(options.agents.parent.skills, ['journal', 'scheduler', 'task-review']);
+    assert.deepEqual(options.agents.parent.skills, ['journal', 'memory', 'scheduler', 'task-review']);
     assert.deepEqual(options.allowedTools, [
         'Skill',
         'Read',
@@ -291,7 +291,7 @@ test('parent skill plugin exposes every native skill with matching frontmatter',
         assert.ok(frontmatter, `${skill} should have YAML frontmatter`);
         assert.match(frontmatter[1]!, new RegExp(`^name: ${skill}$`, 'm'), `${skill} name should match directory`);
         assert.match(frontmatter[1]!, /^description: .+/m, `${skill} should have a description`);
-        assert.match(frontmatter[1]!, /^tools:\n/m, `${skill} should declare a tools: list`);
+        assert.match(frontmatter[1]!, /^tools:\r?\n/m, `${skill} should declare a tools: list`);
         assert.ok(
             Array.isArray(SKILL_POLICY[skill]) && SKILL_POLICY[skill].length > 0,
             `${skill} tools list should be non-empty`,

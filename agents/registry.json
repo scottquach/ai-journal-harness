@@ -1,7 +1,0 @@
-{
-  "parent": {
-    "id": "parent",
-    "description": "Telegram-facing assistant that handles domain work directly through native skills",
-    "botConfigPath": "parent/BOT.md"
-  }
-}

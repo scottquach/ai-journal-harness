@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Telegraf } from 'telegraf';
-import { loadAgentRegistry } from './src/agent-registry.js';
+import { loadBotConfig } from './src/bot-config-loader.js';
 import { createParentAgentRunner } from './src/parent-agent.js';
 import { createConversationStateStore } from './src/conversation-state.js';
 import { setupBot } from './src/bot-setup.js';
@@ -16,7 +16,10 @@ import type { McpServers } from './src/parent-agent.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const bot = new Telegraf(process.env.BOT_TOKEN as string);
-const registry = loadAgentRegistry(join(__dirname, 'agents', 'registry.json'));
+const parent = {
+    id: 'parent',
+    ...loadBotConfig(join(__dirname, 'agents', 'parent', 'BOT.md'), join(__dirname, 'agents', 'parent', 'prompts')),
+};
 const schedulerMirrorPath = process.env.VAULT_PATH
     ? join(process.env.VAULT_PATH, 'agent', 'dynamic-schedules.md')
     : undefined;
@@ -53,7 +56,7 @@ mcpServers.scheduler = () => createSchedulerServer(dynamicScheduler);
 console.log(`[mcp] configured servers: ${Object.keys(mcpServers).join(', ') || 'none'}`);
 
 const runParentAgent = createParentAgentRunner({
-    registry,
+    parent,
     mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
 });
 

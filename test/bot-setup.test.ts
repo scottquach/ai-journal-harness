@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isHandlerTimeoutError, setupBot, type BotContext } from './bot-setup.js';
+import { isHandlerTimeoutError, setupBot, type BotContext } from '../src/bot-setup.js';
 
 type CatchHandler = (error: unknown, ctx: BotContext) => void;
 type BotHandler = (ctx: BotContext) => unknown;

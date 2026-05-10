@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { createDynamicScheduler } from './dynamic-scheduler.js';
+import { createDynamicScheduler } from '../src/dynamic-scheduler.js';
 
 function makeFakeBot() {
     return {

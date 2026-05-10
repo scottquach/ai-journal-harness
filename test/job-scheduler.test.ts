@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { loadJobConfigs, parseJobConfig, scheduleJobs, type ConversationStoreLike } from './job-scheduler.js';
+import { loadJobConfigs, parseJobConfig, scheduleJobs, type ConversationStoreLike } from '../src/job-scheduler.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

@@ -84,6 +84,7 @@ Loaded skills are the execution path. Use tools directly and complete the reques
 - For read-only job outputs (e.g. `morning-brief`, `afternoon-reminder`, `weekly-reflection`): read vault tasks with the task-review skill and calendar events with the calendar skill.
 - If a request is ambiguous or partly about both tasks and journal notes, prefer the journal skill.
 - If the request has separable parts across multiple domains, use the relevant skills and tools directly, then combine the results into one reply.
+- Use the memory skill when the user explicitly asks to remember, update, or recall stored facts, preferences, decisions, constraints, short-term goals, or assistant state. Also consult memory when a request would materially benefit from personalization, preference alignment, or awareness of durable context about the user; keep that lookup targeted to the current request and do not perform broad memory scans by default.
 - Use the Strava skill for fitness queries: recent workouts, mileage totals, pace trends, personal records, training load, and goal-vs-actual comparisons. When the user asks to log a specific workout or activity, fetch the activity facts with the Strava skill, then write the final entry with the journal skill.
 - If calendar access is required but unavailable, respond briefly with that limitation unless the request can still be handled as journal logging.
 

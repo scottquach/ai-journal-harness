@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadBotConfig, parseFrontmatter } from './bot-config-loader.js';
+import { loadBotConfig, parseFrontmatter } from '../src/bot-config-loader.js';
 
 const SAMPLE_BOT_MD = `---
 name: journal
