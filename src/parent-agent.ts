@@ -11,11 +11,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const pluginPath = resolve(__dirname, '../plugins/caveman');
 const parentSkillsPluginPath = resolve(__dirname, '../plugins/parent-skills');
 
-/**
- * Read every subdirectory of plugins/parent-skills/skills/ and extract its
- * tool grants from SKILL.md frontmatter.  Returns a map of skill name →
- * allowed tools, sorted alphabetically so the order is deterministic.
- */
 type McpServerConfig = unknown;
 type McpServerFactory = () => McpServerConfig;
 type McpServerEntry = McpServerConfig | McpServerFactory;
@@ -77,7 +72,7 @@ type ParentAgentOptions = {
     systemPrompt?: string;
 };
 
-type QueryFn = (input: { prompt: string; options: ParentAgentOptions }) => AsyncIterable<any>;
+type QueryFn = (input: { prompt: string | AsyncIterable<any>; options: ParentAgentOptions }) => AsyncIterable<any>;
 
 type ParentRunnerFactoryInput = ParentOptionsInput & {
     queryFn?: QueryFn;
@@ -200,7 +195,7 @@ function logStreamEvent(event: any, executionLogger?: ExecutionLogger): void {
                 const color = ok ? c.green : c.yellow;
                 process.stdout.write(`${color}[mcp] ${server.name}: ${server.status}${c.reset}\n`);
             }
-            const mcpTools = (event.tools ?? []).filter((t) => t.startsWith('mcp__'));
+            const mcpTools = (event.tools ?? []).filter((t: string) => t.startsWith('mcp__'));
             if (mcpTools.length > 0) {
                 process.stdout.write(`${c.dim}[mcp tools] ${mcpTools.join(', ')}${c.reset}\n`);
             } else {
@@ -261,7 +256,10 @@ function resolveMcpServers(mcpServers?: McpServers): Record<string, McpServerCon
 function createParentOptions({ parent, mcpServers }: ParentOptionsInput): ParentAgentOptions {
     const resolvedMcpServers = resolveMcpServers(mcpServers);
     const activeSkills = availableSkills(SKILL_POLICY, { mcpServers: resolvedMcpServers });
-    const allowedTools = toolsForSkills(activeSkills, SKILL_POLICY, { baseTools: [...PARENT_BASE_TOOLS] });
+    const allowedTools = toolsForSkills(activeSkills, SKILL_POLICY, {
+        baseTools: [...PARENT_BASE_TOOLS],
+        mcpServers: resolvedMcpServers,
+    });
     const builtInTools = allowedTools.filter((toolName) => !toolName.startsWith('mcp__'));
 
     return {
@@ -325,10 +323,189 @@ function summarizeStreamEvent(message: any): string {
     return message.type ?? 'unknown';
 }
 
+type InputChannel<T> = {
+    push: (msg: T) => void;
+    close: () => void;
+    iterable: AsyncIterable<T>;
+};
+
+function createInputChannel<T>(): InputChannel<T> {
+    const buf: T[] = [];
+    const waiters: Array<(v: IteratorResult<T>) => void> = [];
+    let closed = false;
+
+    const push = (msg: T) => {
+        if (closed) return;
+        const waiter = waiters.shift();
+        if (waiter) waiter({ value: msg, done: false });
+        else buf.push(msg);
+    };
+
+    const close = () => {
+        if (closed) return;
+        closed = true;
+        while (waiters.length) waiters.shift()!({ value: undefined as unknown as T, done: true });
+    };
+
+    const iterable: AsyncIterable<T> = {
+        [Symbol.asyncIterator]() {
+            return {
+                next() {
+                    if (buf.length) return Promise.resolve({ value: buf.shift()!, done: false });
+                    if (closed) return Promise.resolve({ value: undefined as unknown as T, done: true });
+                    return new Promise<IteratorResult<T>>((r) => waiters.push(r));
+                },
+                return() {
+                    close();
+                    return Promise.resolve({ value: undefined as unknown as T, done: true });
+                },
+            };
+        },
+    };
+
+    return { push, close, iterable };
+}
+
+type PendingTurn = {
+    resolve: (output: string) => void;
+    reject: (err: Error) => void;
+    executionLogger: ExecutionLogger;
+};
+
+type Session = {
+    sessionId: string;
+    channel: InputChannel<any>;
+    loadedSkills: string[];
+    pendingTurn: PendingTurn | null;
+    mutex: Promise<void>;
+    dead: boolean;
+};
+
+function createSession(
+    queryImpl: QueryFn,
+    options: ParentAgentOptions,
+    initialLogger: ExecutionLogger,
+): Session {
+    const channel = createInputChannel<any>();
+    const loadedSkills = options.agents[options.agent].skills;
+    const session: Session = {
+        sessionId: randomUUID(),
+        channel,
+        loadedSkills,
+        pendingTurn: null,
+        mutex: Promise.resolve(),
+        dead: false,
+    };
+
+    const iter = queryImpl({ prompt: channel.iterable, options });
+
+    (async () => {
+        try {
+            for await (const message of iter as AsyncIterable<any>) {
+                logStreamEvent(message, session.pendingTurn?.executionLogger ?? initialLogger);
+                if (message.type === 'result') {
+                    const turn = session.pendingTurn;
+                    session.pendingTurn = null;
+                    if (!turn) continue;
+                    if (message.subtype === 'success') {
+                        turn.resolve(message.result ?? '');
+                    } else {
+                        const errorMsg = message.errors?.join('; ') ?? `Claude ended with subtype: ${message.subtype}`;
+                        turn.reject(new Error(errorMsg));
+                    }
+                }
+            }
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error(`[claude] session loop error: ${err.message}`, getErrorStack(err));
+            session.pendingTurn?.reject(err);
+            session.pendingTurn = null;
+        } finally {
+            session.dead = true;
+            channel.close();
+        }
+    })();
+
+    return session;
+}
+
+async function runOnSession(
+    session: Session,
+    promptText: string,
+    executionLogger: ExecutionLogger,
+): Promise<string> {
+    if (session.dead) throw new Error('session is dead');
+
+    const prev = session.mutex;
+    let release!: () => void;
+    session.mutex = new Promise<void>((r) => { release = r; });
+    await prev;
+
+    try {
+        if (session.dead) throw new Error('session died before turn could start');
+        return await new Promise<string>((resolve, reject) => {
+            session.pendingTurn = { resolve, reject, executionLogger };
+            session.channel.push({
+                type: 'user',
+                message: { role: 'user', content: promptText },
+                parent_tool_use_id: null,
+                session_id: session.sessionId,
+            });
+        });
+    } finally {
+        release();
+    }
+}
+
+async function runOneShot(
+    queryImpl: QueryFn,
+    options: ParentAgentOptions,
+    promptText: string,
+    executionLogger: ExecutionLogger,
+    onFirstEvent: (event: any) => void,
+): Promise<string> {
+    let result: string | null = null;
+    let firstEventSeen = false;
+
+    for await (const message of queryImpl({ prompt: promptText, options }) as AsyncIterable<any>) {
+        if (!firstEventSeen) {
+            firstEventSeen = true;
+            onFirstEvent(message);
+        }
+        logStreamEvent(message, executionLogger);
+        if (message.type === 'result') {
+            if (message.subtype === 'success') {
+                result = message.result ?? '';
+                continue;
+            }
+            const errorMsg = message.errors?.join('; ') ?? `Claude ended with subtype: ${message.subtype}`;
+            console.error('[claude] result event failure:', JSON.stringify(message, null, 2));
+            throw new Error(errorMsg);
+        }
+    }
+
+    return result ?? '';
+}
+
+function shouldPersistSession(source: string | undefined, chatId: string | undefined): boolean {
+    return source === 'telegram' && !!chatId;
+}
+
 function createParentAgentRunner({ parent, mcpServers, queryFn, executionLogPath }: ParentRunnerFactoryInput): ParentRunner {
     const claudePath = process.env.CLAUDE_PATH ?? 'claude';
     const queryImpl: QueryFn = queryFn ?? (query as unknown as QueryFn);
     const logPath = executionLogPath ?? process.env.CLAUDE_EXECUTION_LOG_PATH ?? resolve(__dirname, '../logs/execution.log');
+    const sessionsByChatId = new Map<string, Session>();
+
+    function getOrCreateSession(chatId: string, executionLogger: ExecutionLogger): Session {
+        let session = sessionsByChatId.get(chatId);
+        if (session && !session.dead) return session;
+
+        const options = createParentOptions({ parent, mcpServers });
+        session = createSession(queryImpl, options, executionLogger);
+        sessionsByChatId.set(chatId, session);
+        return session;
+    }
 
     return async function runParentAgent({ prompt = '', source, jobName, chatId } = {}) {
         const startedAt = Date.now();
@@ -344,64 +521,78 @@ function createParentAgentRunner({ parent, mcpServers, queryFn, executionLogPath
         await ensureClaudeExecutableCheck(claudePath);
         console.log(`[claude] preflight complete durationMs=${Date.now() - startedAt}`);
 
-        const options = createParentOptions({ parent, mcpServers });
-        const loadedSkills = availableSkills(SKILL_POLICY, { mcpServers: options.mcpServers });
         const finalPrompt = buildInvocationPrompt({ chatId, jobName, prompt, source });
-        let result: string | null = null;
-        let firstEventLogged = false;
 
-        console.log(
-            `[claude] query started source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} skills=${loadedSkills.join(',') || 'none'}`,
-        );
-        executionLogger.write(
-            `query started source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} skills=${loadedSkills.join(',') || 'none'}`,
-        );
+        const persist = shouldPersistSession(source, chatId);
+        let result: string;
+        let loadedSkills: string[];
 
-        try {
-            for await (const message of queryImpl({ prompt: finalPrompt, options })) {
-                if (!firstEventLogged) {
-                    firstEventLogged = true;
+        if (persist) {
+            const session = getOrCreateSession(chatId!, executionLogger);
+            loadedSkills = session.loadedSkills;
+
+            console.log(
+                `[claude] query started source=${source} chatId=${chatId} jobName=${jobName ?? 'n/a'} skills=${loadedSkills.join(',') || 'none'} sessionReused=${sessionsByChatId.get(chatId!) === session ? 'true' : 'false'}`,
+            );
+            executionLogger.write(
+                `query started source=${source} chatId=${chatId} jobName=${jobName ?? 'n/a'} skills=${loadedSkills.join(',') || 'none'}`,
+            );
+
+            try {
+                console.log(`[claude] first stream event afterMs=${Date.now() - startedAt} event=turn-start`);
+                executionLogger.write(`first stream event afterMs=${Date.now() - startedAt} event=turn-start`);
+                result = await runOnSession(session, finalPrompt, executionLogger);
+            } catch (error) {
+                if (sessionsByChatId.get(chatId!) === session) sessionsByChatId.delete(chatId!);
+                executionLogger.write(
+                    `parent run failed source=${source} chatId=${chatId} jobName=${jobName ?? 'n/a'} durationMs=${Date.now() - startedAt} error=${getErrorMessage(error)}`,
+                );
+                console.error(
+                    `[claude] parent run failed source=${source} chatId=${chatId} jobName=${jobName ?? 'n/a'} durationMs=${Date.now() - startedAt} error=${getErrorMessage(error)}`,
+                    getErrorStack(error),
+                );
+                throw error;
+            }
+        } else {
+            const options = createParentOptions({ parent, mcpServers });
+            loadedSkills = availableSkills(SKILL_POLICY, { mcpServers: options.mcpServers });
+
+            console.log(
+                `[claude] query started source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} skills=${loadedSkills.join(',') || 'none'}`,
+            );
+            executionLogger.write(
+                `query started source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} skills=${loadedSkills.join(',') || 'none'}`,
+            );
+
+            try {
+                result = await runOneShot(queryImpl, options, finalPrompt, executionLogger, (event) => {
                     console.log(
-                        `[claude] first stream event afterMs=${Date.now() - startedAt} event=${summarizeStreamEvent(message)}`,
+                        `[claude] first stream event afterMs=${Date.now() - startedAt} event=${summarizeStreamEvent(event)}`,
                     );
                     executionLogger.write(
-                        `first stream event afterMs=${Date.now() - startedAt} event=${summarizeStreamEvent(message)}`,
+                        `first stream event afterMs=${Date.now() - startedAt} event=${summarizeStreamEvent(event)}`,
                     );
-                }
-                logStreamEvent(message, executionLogger);
-                if (message.type === 'result') {
-                    if (message.subtype === 'success') {
-                        result = message.result ?? '';
-                        continue;
-                    }
-
-                    const errorMsg = message.errors?.join('; ') ?? `Claude ended with subtype: ${message.subtype}`;
-                    console.error('[claude] result event failure:', JSON.stringify(message, null, 2));
-                    throw new Error(errorMsg);
-                }
+                });
+            } catch (error) {
+                executionLogger.write(
+                    `parent run failed source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} durationMs=${Date.now() - startedAt} error=${getErrorMessage(error)}`,
+                );
+                console.error(
+                    `[claude] parent run failed source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} durationMs=${Date.now() - startedAt} error=${getErrorMessage(error)}`,
+                    getErrorStack(error),
+                );
+                throw error;
             }
-        } catch (error) {
-            executionLogger.write(
-                `parent run failed source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} durationMs=${Date.now() - startedAt} firstEventSeen=${firstEventLogged} error=${getErrorMessage(error)}`,
-            );
-            console.error(
-                `[claude] parent run failed source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} durationMs=${Date.now() - startedAt} firstEventSeen=${firstEventLogged} error=${getErrorMessage(error)}`,
-                getErrorStack(error),
-            );
-            throw error;
         }
 
         console.log(
-            `[claude] parent run completed source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} durationMs=${Date.now() - startedAt} outputLength=${(result ?? '').length}`,
+            `[claude] parent run completed source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} durationMs=${Date.now() - startedAt} outputLength=${result.length}`,
         );
         executionLogger.write(
-            `parent run completed source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} durationMs=${Date.now() - startedAt} outputLength=${(result ?? '').length}`,
+            `parent run completed source=${source ?? 'unknown'} chatId=${chatId ?? 'n/a'} jobName=${jobName ?? 'n/a'} durationMs=${Date.now() - startedAt} outputLength=${result.length}`,
         );
 
-        return {
-            loadedSkills,
-            output: result ?? '',
-        };
+        return { loadedSkills, output: result };
     };
 }
 

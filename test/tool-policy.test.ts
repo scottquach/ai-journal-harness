@@ -5,12 +5,26 @@ import { availableSkills, parseToolsFromFrontmatter, toolsForSkills, type SkillP
 const MOCK_TOOLS_BY_SKILL: SkillPolicy = {
     journal: ['Read', 'Write', 'Edit'],
     'task-review': ['Read'],
-    calendar: ['mcp__calendar__*'],
+    calendar: ['mcp__composio__GOOGLECALENDAR_*', 'mcp__calendar__get_calendar_events'],
 };
 
 test('toolsForSkills scopes tools to selected skills', () => {
     assert.deepEqual(toolsForSkills(['journal'], MOCK_TOOLS_BY_SKILL), ['Skill', 'Read', 'Write', 'Edit']);
-    assert.deepEqual(toolsForSkills(['calendar'], MOCK_TOOLS_BY_SKILL), ['Skill', 'mcp__calendar__*']);
+    assert.deepEqual(
+        toolsForSkills(['calendar'], MOCK_TOOLS_BY_SKILL),
+        ['Skill', 'mcp__composio__GOOGLECALENDAR_*', 'mcp__calendar__get_calendar_events'],
+    );
+});
+
+test('toolsForSkills filters MCP grants to configured servers when provided', () => {
+    assert.deepEqual(
+        toolsForSkills(['calendar'], MOCK_TOOLS_BY_SKILL, { mcpServers: { composio: { type: 'http' } } }),
+        ['Skill', 'mcp__composio__GOOGLECALENDAR_*'],
+    );
+    assert.deepEqual(
+        toolsForSkills(['calendar'], MOCK_TOOLS_BY_SKILL, { mcpServers: { calendar: { type: 'stdio' } } }),
+        ['Skill', 'mcp__calendar__get_calendar_events'],
+    );
 });
 
 test('toolsForSkills de-duplicates overlapping tools', () => {
@@ -27,9 +41,13 @@ test('availableSkills omits MCP-backed skills when their server is not configure
     );
 });
 
-test('availableSkills keeps MCP-backed skills when their server is configured', () => {
+test('availableSkills keeps MCP-backed skills when any referenced server is configured', () => {
     assert.deepEqual(
         availableSkills(MOCK_TOOLS_BY_SKILL, { mcpServers: { calendar: { type: 'stdio' } } }),
+        ['journal', 'task-review', 'calendar'],
+    );
+    assert.deepEqual(
+        availableSkills(MOCK_TOOLS_BY_SKILL, { mcpServers: { composio: { type: 'http' } } }),
         ['journal', 'task-review', 'calendar'],
     );
 });

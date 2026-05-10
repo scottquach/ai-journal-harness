@@ -37,7 +37,7 @@ const dynamicScheduler = createDynamicScheduler(schedulerDeps);
 
 const mcpServers: McpServers = {};
 if (process.env.COMPOSIO_CONSUMER_API_KEY) {
-    mcpServers.calendar = {
+    mcpServers.composio = {
         type: 'http',
         url: 'https://connect.composio.dev/mcp',
         headers: { 'x-consumer-api-key': process.env.COMPOSIO_CONSUMER_API_KEY },

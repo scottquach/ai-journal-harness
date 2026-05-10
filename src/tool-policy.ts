@@ -24,12 +24,26 @@ function parseMcpServerName(toolName: string): string | null {
     return match ? match[1] : null;
 }
 
+function hasMcpTool(toolName: string): boolean {
+    return parseMcpServerName(toolName) !== null;
+}
+
 function skillNeedsUnavailableMcpTool(skillTools: string[] = [], availableMcpServers: string[] = []): boolean {
     const available = new Set(availableMcpServers);
-    return skillTools.some((toolName) => {
+    const mcpTools = skillTools.filter(hasMcpTool);
+
+    if (mcpTools.length === 0) return false;
+
+    return !mcpTools.some((toolName) => {
         const serverName = parseMcpServerName(toolName);
-        return serverName ? !available.has(serverName) : false;
+        return serverName ? available.has(serverName) : false;
     });
+}
+
+function toolIsAvailable(toolName: string, availableMcpServers?: Set<string>): boolean {
+    const serverName = parseMcpServerName(toolName);
+    if (!serverName || !availableMcpServers) return true;
+    return availableMcpServers.has(serverName);
 }
 
 /**
@@ -66,9 +80,12 @@ function availableSkills(
 function toolsForSkills(
     skills: string[] = [],
     toolsBySkill: SkillPolicy = {},
-    { baseTools = [] }: { baseTools?: string[] } = {},
+    { baseTools = [], mcpServers }: { baseTools?: string[]; mcpServers?: Record<string, unknown> } = {},
 ): string[] {
-    const skillTools = skills.flatMap((skill) => toolsBySkill[skill] ?? []);
+    const availableMcpServers = mcpServers ? new Set(Object.keys(mcpServers)) : undefined;
+    const skillTools = skills
+        .flatMap((skill) => toolsBySkill[skill] ?? [])
+        .filter((toolName) => toolIsAvailable(toolName, availableMcpServers));
     return unique([
         ...baseTools,
         'Skill',
