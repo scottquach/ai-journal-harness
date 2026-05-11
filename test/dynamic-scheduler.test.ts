@@ -35,7 +35,7 @@ test('dynamic scheduler mirrors persisted schedules to the agent folder', () => 
     try {
         const scheduler = createDynamicScheduler({
             bot: makeFakeBot(),
-            runParentAgent: null,
+            dispatchTurn: null,
             persistPath,
             persistMirrorPath,
             timezone: 'America/Los_Angeles',

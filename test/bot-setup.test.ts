@@ -43,8 +43,7 @@ test('setupBot registers a bot.catch handler that logs timeout context', async (
     };
 
     setupBot(telegramBot, {
-        runParentAgent: async () => ({ output: 'ok' }),
-        conversationStore: { buildPrompt: () => '', appendTurn: () => {} },
+        dispatchTurn: async () => ({ output: 'ok', delivered: true, skipped: false }),
         transcribeVoice: async () => 'voice',
     });
 

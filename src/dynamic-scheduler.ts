@@ -1,9 +1,15 @@
 import nodeCron from 'node-cron';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { CronLike, RunParentAgent, TelegramBotLike } from './job-scheduler.js';
-import { isSkipOutput } from './skip-output.js';
+import type { DispatchTurn } from './dispatch-turn.js';
+import type { CronLike } from './job-scheduler.js';
 import { markdownToTelegramHtml } from './telegram-format.js';
+
+type TelegramBotLike = {
+    telegram: {
+        sendMessage: (chatId: string, text: string, options?: { parse_mode: 'HTML' }) => Promise<unknown>;
+    };
+};
 
 type ScheduleMode = 'llm' | 'message';
 
@@ -36,7 +42,7 @@ type DynamicMessageInput = DynamicScheduleInput & {
 
 type DynamicSchedulerDeps = {
     bot: TelegramBotLike;
-    runParentAgent: RunParentAgent | null;
+    dispatchTurn: DispatchTurn | null;
     defaultChatId?: string;
     persistPath: string;
     persistMirrorPath?: string;
@@ -155,7 +161,7 @@ function renderScheduleMarkdown(records: DynamicScheduleRecord[], updatedAt: str
 }
 
 function createDynamicScheduler(deps: DynamicSchedulerDeps): DynamicScheduler {
-    // deps.runParentAgent may be null at construction time — injected later
+    // deps.dispatchTurn may be null at construction time — injected later
     const tasks = new Map<string, { record: DynamicScheduleRecord; cronTask: CronTaskLike }>();
 
     function _writeJsonFile(path: string, records: DynamicScheduleRecord[]): void {
@@ -198,21 +204,17 @@ function createDynamicScheduler(deps: DynamicSchedulerDeps): DynamicScheduler {
                             .catch((err) => console.error(`[scheduler] telegram send failed: ${getErrorMessage(err)}`));
                     }
                 } else {
-                    if (!deps.runParentAgent) {
-                        throw new Error('runParentAgent not yet available');
+                    if (!deps.dispatchTurn) {
+                        throw new Error('dispatchTurn not yet available');
                     }
-                    const { output } = await deps.runParentAgent({
-                        chatId: chatId ?? 'global',
-                        jobName: record.id,
-                        prompt: record.prompt ?? '',
+                    await deps.dispatchTurn({
                         source: 'scheduler',
+                        chatId: chatId ?? 'global',
+                        input: record.prompt ?? '',
+                        deliverTo: chatId ?? null,
+                        errorLabel: `Scheduled task "${record.label ?? record.id}"`,
+                        jobName: record.id,
                     });
-                    const shouldSkip = isSkipOutput(output);
-                    if (chatId && !shouldSkip) {
-                        await deps.bot.telegram
-                            .sendMessage(chatId, markdownToTelegramHtml(output), { parse_mode: 'HTML' })
-                            .catch((err) => console.error(`[scheduler] telegram send failed: ${getErrorMessage(err)}`));
-                    }
                 }
             } catch (err) {
                 console.error(`[scheduler] failed: ${record.id} — ${getErrorMessage(err)}`);

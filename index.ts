@@ -5,6 +5,7 @@ import { Telegraf } from 'telegraf';
 import { loadBotConfig } from './src/bot-config-loader.js';
 import { createParentAgentRunner } from './src/parent-agent.js';
 import { createConversationStateStore } from './src/conversation-state.js';
+import { createDispatchTurn } from './src/dispatch-turn.js';
 import { setupBot } from './src/bot-setup.js';
 import { scheduleJobs } from './src/job-scheduler.js';
 import { createTranscriber } from './src/transcribe.js';
@@ -24,10 +25,10 @@ const schedulerMirrorPath = process.env.VAULT_PATH
     ? join(process.env.VAULT_PATH, 'agent', 'dynamic-schedules.md')
     : undefined;
 
-// runParentAgent is injected after the runner is created (deferred pattern)
+// dispatchTurn is injected after the runner is created (deferred pattern)
 const schedulerDeps: DynamicSchedulerDeps = {
     bot,
-    runParentAgent: null,
+    dispatchTurn: null,
     defaultChatId: process.env.DEFAULT_CHAT_ID,
     persistPath: join(__dirname, 'schedules', 'dynamic-schedules.json'),
     persistMirrorPath: schedulerMirrorPath,
@@ -60,19 +61,23 @@ const runParentAgent = createParentAgentRunner({
     mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
 });
 
-schedulerDeps.runParentAgent = runParentAgent;
-dynamicScheduler.reloadFromDisk();
 const conversationStore = createConversationStateStore();
-
-setupBot(bot, {
+const dispatchTurn = createDispatchTurn({
     runParentAgent,
     conversationStore,
+    telegramSend: (chatId, text, options) => bot.telegram.sendMessage(chatId, text, options),
+});
+
+schedulerDeps.dispatchTurn = dispatchTurn;
+dynamicScheduler.reloadFromDisk();
+
+setupBot(bot, {
+    dispatchTurn,
     transcribeVoice: createTranscriber(),
 });
 
-scheduleJobs(bot, join(__dirname, 'jobs'), {
-    runParentAgent,
-    conversationStore,
+scheduleJobs(join(__dirname, 'jobs'), {
+    dispatchTurn,
 });
 
 console.log('Bot is running...');
