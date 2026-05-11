@@ -12,10 +12,15 @@ The whole project can be fully hosted locally or on your own VPC.
 
 ## What it does
 
-- **Voice logging** — send a voice message and it gets transcribed via whisper and logged automatically
+- **Text + voice logging** — send a text or voice message via Telegram; voice is transcribed with Whisper and logged automatically
 - **Smart categorization** — Claude classifies entries as moods (`#mood`), events (`#event`), tasks (`- [ ]`), or general notes (`#note`) based on content
 - **Markdown native** — writes directly into weekly journal files (`YYYY-Wxx.md`) under the correct day heading
 - **Date-aware** — every prompt is injected with today's date, current time, week number, and pre-computed file paths so Claude always logs to the right place
+- **Scheduled jobs** — define recurring prompts in `jobs/` (weekly reviews, goal checks, task rollovers) that Claude runs on a cron schedule
+- **Self-scheduling** — Claude can create and manage its own scheduled jobs on request or based on its own insights
+- **Calendar awareness** — optional iCal feeds give Claude a tool to query your upcoming events
+- **Conversation continuity** — per-chat history is persisted to disk with summarized memory so context survives restarts
+- **Fully self-hostable** — runs entirely locally or on your own VPC; no third-party services beyond Telegram and Anthropic/OpenAI
 
 ## Environment variables
 
