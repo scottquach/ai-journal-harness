@@ -1,5 +1,6 @@
-import { defineTool } from '@earendil-works/pi-coding-agent';
-import { Type } from '@earendil-works/pi-ai';
+import { tool, zodSchema } from 'ai';
+import type { Tool } from 'ai';
+import { z } from 'zod';
 import { TZDate } from '@date-fns/tz';
 import { addDays, endOfDay, startOfDay } from 'date-fns';
 import ical from 'node-ical';
@@ -54,10 +55,6 @@ function getDefaultStartDate(now = new Date(), timeZone = getCalendarTimezone())
     return startOfDay(TZDate.tz(timeZone, now.getTime()));
 }
 
-/**
- * Fetch and parse events from a single iCal URL.
- * Returns raw parsed calendar data keyed by UID.
- */
 async function fetchIcal(url: string, timeoutMs = 10000): Promise<ParsedCalendar> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -73,9 +70,6 @@ async function fetchIcal(url: string, timeoutMs = 10000): Promise<ParsedCalendar
     }
 }
 
-/**
- * Normalize a single event (or recurring instance) into a flat object.
- */
 function normalizeEvent(instance: any, calendarLabel: string): CalendarEvent {
     const timeZone = getCalendarTimezone();
     const startRaw = instance.start instanceof Date ? instance.start : new Date(instance.start);
@@ -102,10 +96,6 @@ function normalizeEvent(instance: any, calendarLabel: string): CalendarEvent {
     };
 }
 
-/**
- * Extract events from parsed iCal data within a date range.
- * Handles both single and recurring events via expandRecurringEvent.
- */
 function extractEvents(parsed: ParsedCalendar, from: Date, to: Date, calendarLabel: string): CalendarEvent[] {
     const events: CalendarEvent[] = [];
     for (const [, entry] of Object.entries(parsed)) {
@@ -124,18 +114,6 @@ function extractEvents(parsed: ParsedCalendar, from: Date, to: Date, calendarLab
     return events;
 }
 
-/**
- * Fetch calendar events from multiple iCal URLs and return a merged, sorted list.
- *
- * @param {string[]} urls - iCal feed URLs
- * @param {string[]} labels - Human-readable labels for each URL
- * @param {object} options
- * @param {number} [options.daysAhead=14] - Days into the future to fetch
- * @param {string} [options.startDate] - ISO date string for range start (defaults to today)
- * @param {string} [options.endDate] - ISO date string for range end (overrides daysAhead)
- * @param {string} [options.search] - Case-insensitive text filter on title/description
- * @returns {Promise<{events: object[], warnings: string[]}>}
- */
 async function fetchCalendarEvents(urls: string[], labels: string[], options: CalendarFetchOptions = {}): Promise<CalendarFetchResult> {
     const { daysAhead = 14, startDate, endDate, search } = options;
     const timeZone = getCalendarTimezone();
@@ -162,7 +140,6 @@ async function fetchCalendarEvents(urls: string[], labels: string[], options: Ca
         }
     }
 
-    // Deduplicate by UID (keep first occurrence)
     const seen = new Set<string>();
     const deduped: CalendarEvent[] = [];
     for (const event of allEvents) {
@@ -172,10 +149,8 @@ async function fetchCalendarEvents(urls: string[], labels: string[], options: Ca
         deduped.push(event);
     }
 
-    // Sort by start time
     deduped.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-    // Apply search filter
     let filtered = deduped;
     if (search) {
         const q = search.toLowerCase();
@@ -185,45 +160,29 @@ async function fetchCalendarEvents(urls: string[], labels: string[], options: Ca
     return { events: filtered, warnings };
 }
 
-/**
- * Create an in-process Pi tool that exposes calendar events.
- *
- * @param {string[]} urls - iCal feed URLs
- * @param {string[]} labels - Human-readable labels for each URL
- * @returns {McpSdkServerConfigWithInstance}
- */
-function createCalendarTools(urls: string[], labels: string[]) {
-    return [
-        defineTool({
-            name: 'mcp__calendar__get_calendar_events',
-            label: 'Get Calendar Events',
+function createCalendarTools(urls: string[], labels: string[]): Record<string, Tool<any, any>> {
+    return {
+        getCalendarEvents: tool({
             description: 'Fetch upcoming calendar events from all configured calendars. Returns a merged, sorted list of events.',
-            parameters: Type.Object({
-                days_ahead: Type.Optional(Type.Number({ description: 'Number of days into the future to fetch (default: 14)' })),
-                start_date: Type.Optional(Type.String({ description: 'Date for range start: YYYY-MM-DD, today, or tomorrow. Defaults to today.' })),
-                end_date: Type.Optional(Type.String({ description: 'Date for range end: YYYY-MM-DD, today, or tomorrow. Overrides days_ahead if provided.' })),
-                search: Type.Optional(Type.String({ description: 'Case-insensitive text filter on event title and description' })),
-            }),
-            execute: async (_toolCallId, args) => {
+            inputSchema: zodSchema(z.object({
+                days_ahead: z.number().optional().describe('Number of days into the future to fetch (default: 14)'),
+                start_date: z.string().optional().describe('Date for range start: YYYY-MM-DD, today, or tomorrow. Defaults to today.'),
+                end_date: z.string().optional().describe('Date for range end: YYYY-MM-DD, today, or tomorrow. Overrides days_ahead if provided.'),
+                search: z.string().optional().describe('Case-insensitive text filter on event title and description'),
+            })),
+            execute: async ({ days_ahead, start_date, end_date, search }) => {
                 const { events, warnings } = await fetchCalendarEvents(urls, labels, {
-                    daysAhead: args.days_ahead,
-                    startDate: args.start_date,
-                    endDate: args.end_date,
-                    search: args.search,
+                    daysAhead: days_ahead,
+                    startDate: start_date,
+                    endDate: end_date,
+                    search,
                 });
 
-                let text = JSON.stringify(events, null, 2);
-                if (warnings.length > 0) {
-                    text += '\n\nWarnings:\n' + warnings.map((w) => `- ${w}`).join('\n');
-                }
-                if (events.length === 0 && warnings.length === 0) {
-                    text = 'No events found in the requested date range.';
-                }
-
-                return { content: [{ type: 'text' as const, text }], details: {} };
+                if (events.length === 0 && warnings.length === 0) return 'No events found in the requested date range.';
+                return { events, warnings: warnings.length > 0 ? warnings : undefined };
             },
         }),
-    ];
+    };
 }
 
 export {

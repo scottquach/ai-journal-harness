@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { Tool } from 'ai';
 import { createComposioCalendarTools } from './mcp/composio-calendar.js';
 import { createCalendarTools } from './mcp/calendar.js';
 import { createSchedulerTools } from './mcp/scheduler.js';
@@ -12,6 +12,8 @@ type ParentToolConfig = {
     icalLabels?: string;
 };
 
+type ParentTools = Record<string, Tool<any, any>>;
+
 function splitCsv(value: string | undefined): string[] {
     return (value ?? '')
         .split(',')
@@ -19,26 +21,32 @@ function splitCsv(value: string | undefined): string[] {
         .filter(Boolean);
 }
 
-function createParentTools(config: ParentToolConfig, dynamicScheduler: DynamicScheduler): ToolDefinition[] {
-    const tools: ToolDefinition[] = [];
-    const urls = splitCsv(config.icalUrls);
+function createParentTools(config: ParentToolConfig, dynamicScheduler: DynamicScheduler): ParentTools {
+    const tools: ParentTools = {};
     const composioApiKey = config.composioApiKey ?? config.composioConsumerApiKey;
 
     if (composioApiKey) {
-        tools.push(
-            ...createComposioCalendarTools({
+        Object.assign(
+            tools,
+            createComposioCalendarTools({
                 apiKey: composioApiKey,
                 userId: config.composioUserId,
             }),
         );
     }
 
-    if (urls.length > 0) {
-        tools.push(...createCalendarTools(urls, splitCsv(config.icalLabels)));
+    // Only add iCal fallback when Composio is not configured (avoids getCalendarEvents name collision)
+    if (!composioApiKey) {
+        const urls = splitCsv(config.icalUrls);
+        if (urls.length > 0) {
+            Object.assign(tools, createCalendarTools(urls, splitCsv(config.icalLabels)));
+        }
     }
 
-    tools.push(...createSchedulerTools(dynamicScheduler));
+    Object.assign(tools, createSchedulerTools(dynamicScheduler));
+
     return tools;
 }
 
 export { createParentTools, splitCsv };
+export type { ParentToolConfig, ParentTools };

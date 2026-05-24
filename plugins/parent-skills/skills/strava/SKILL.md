@@ -2,8 +2,8 @@
 name: strava
 description: Use for Strava activity lookups, fitness stats, workout summaries, and workout facts for journal logging.
 tools:
-  - read
-  - mcp__strava__*
+  - readFile
+  - bash
 ---
 
 # Strava Skill

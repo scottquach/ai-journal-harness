@@ -15,7 +15,9 @@
       "Bash(awk -F: '{if \\($1 > 7938\\) print}')",
       "Bash(git stash *)",
       "Bash(git pull *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\scott\\\\Repositories\\\\claude-librarian\\\\src\" -Recurse -Force | Where-Object {-not $_.PSIsContainer} | Select-Object FullName, @{Name=\"Size\";Expression={$_.Length}} | Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\scott\\\\Repositories\\\\claude-librarian\\\\plugins\" -Recurse -Force | Where-Object {-not $_.PSIsContainer} | Select-Object FullName)"
     ]
   }
 }

@@ -2,9 +2,8 @@
 name: memory
 description: Use for reading, adding, reviewing, or updating assistant memory, including short-term goals and long-term facts, preferences, references, decisions, and constraints from the user.
 tools:
-    - read
-    - write
-    - edit
+    - readFile
+    - writeFile
 ---
 
 # Memory Skill

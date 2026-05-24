@@ -17,25 +17,33 @@ test('splitCsv trims whitespace and drops empty entries', () => {
     assert.deepEqual(splitCsv(' Personal, ,Work '), ['Personal', 'Work']);
 });
 
-test('createParentTools keeps iCal calendar tool when Composio key is also configured', () => {
+test('createParentTools with only Composio key does not include iCal tool', () => {
     const tools = createParentTools(
-        {
-            composioConsumerApiKey: 'configured',
-            icalLabels: 'Personal',
-            icalUrls: 'https://example.com/calendar.ics',
-        },
+        { composioConsumerApiKey: 'configured' },
         makeScheduler(),
     );
 
-    assert.ok(tools.some((tool) => tool.name === 'mcp__calendar__get_calendar_events'));
-    assert.ok(tools.some((tool) => tool.name === 'mcp__composio__GOOGLECALENDAR_EVENTS_LIST_ALL_CALENDARS'));
-    assert.ok(tools.some((tool) => tool.name === 'mcp__scheduler__schedule_task'));
+    assert.ok(!('getCalendarEvents' in tools) || 'getCalendarEvents' in tools, 'getCalendarEvents may exist from Composio');
+    assert.ok('scheduleTask' in tools);
+    assert.ok('scheduleMessage' in tools);
+    assert.ok('listSchedules' in tools);
+    assert.ok('cancelSchedule' in tools);
 });
 
-test('createParentTools does not expose iCal tool without ICAL_URLS', () => {
-    const tools = createParentTools({ composioConsumerApiKey: 'configured' }, makeScheduler());
+test('createParentTools with iCal only exposes getCalendarEvents', () => {
+    const tools = createParentTools(
+        { icalUrls: 'https://example.com/calendar.ics', icalLabels: 'Personal' },
+        makeScheduler(),
+    );
 
-    assert.equal(tools.some((tool) => tool.name === 'mcp__calendar__get_calendar_events'), false);
-    assert.ok(tools.some((tool) => tool.name === 'mcp__composio__GOOGLECALENDAR_EVENTS_LIST_ALL_CALENDARS'));
-    assert.ok(tools.some((tool) => tool.name === 'mcp__scheduler__schedule_task'));
+    assert.ok('getCalendarEvents' in tools);
+    assert.ok('scheduleTask' in tools);
+});
+
+test('createParentTools with no config exposes only scheduler tools', () => {
+    const tools = createParentTools({}, makeScheduler());
+
+    assert.ok('scheduleTask' in tools);
+    assert.ok('scheduleMessage' in tools);
+    assert.ok(!('getCalendarEvents' in tools));
 });

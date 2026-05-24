@@ -42,7 +42,7 @@ const tools = createParentTools(
     },
     dynamicScheduler,
 );
-console.log(`[pi] configured tools: ${tools.map((tool) => tool.name).join(', ') || 'none'}`);
+console.log(`[agent] configured tools: ${Object.keys(tools).join(', ') || 'none'}`);
 
 const runParentAgent = createParentAgentRunner({ parent, tools });
 
