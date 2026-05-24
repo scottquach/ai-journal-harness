@@ -28,6 +28,9 @@ The whole project can be fully hosted locally or on your own VPC.
 | `DEFAULT_CHAT_ID` | No | Telegram chat ID to send proactive/scheduled messages to. Required if you use jobs with `telegram: true` |
 | `ICAL_URLS` | No | Comma-separated iCal feed URLs (Google Calendar, Apple Calendar, etc.). Enables a calendar MCP tool so Claude can query your upcoming events |
 | `ICAL_LABELS` | No | Comma-separated labels for each iCal feed (e.g. `Personal,Work`). Matched by position to `ICAL_URLS` |
+| `COMPOSIO_API_KEY` | No | Composio API key. Enables Pi custom tools for Google Calendar read/write actions when the Google Calendar account is connected in Composio |
+| `COMPOSIO_CONSUMER_API_KEY` | No | Legacy fallback API key name. Prefer `COMPOSIO_API_KEY` |
+| `COMPOSIO_USER_ID` | No | Composio connected user ID to execute calendar tools for. Defaults to `DEFAULT_CHAT_ID` when omitted |
 | `PI_MODEL` | No | Runtime model override in `provider/model-id` form, or an alias such as `gemini`, `sonnet`, `opus`, or `haiku`. Defaults to `openrouter/google/gemini-3.5-flash`; built-in aliases route through OpenRouter |
 
 `BOT_TIMEZONE` is important for journaling accuracy. Without it, "today" and the current time could default to UTC, causing entries to land in the wrong day heading.

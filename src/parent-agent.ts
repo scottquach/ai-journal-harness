@@ -219,6 +219,10 @@ async function createPiParentSession(parent: ParentConfig, tools: ToolDefinition
     await loader.reload();
 
     const customToolNames = tools.map((t) => t.name);
+
+
+    console.log("TOOLS", tools);
+
     const { session } = await createAgentSession({
         cwd,
         agentDir,

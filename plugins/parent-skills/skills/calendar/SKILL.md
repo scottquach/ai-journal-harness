@@ -8,11 +8,11 @@ tools:
 
 # Calendar Skill
 
-Use this skill for calendar lookups, schedule questions, availability checks, event summaries, and calendar event mutations if the active MCP server supports them.
+Use this skill for calendar lookups, schedule questions, availability checks, event summaries, and calendar event mutations if the active tool list supports them.
 
-Use the Composio Google Calendar MCP tools to create, update, delete, and answer questions about events, schedule, time windows, and availability. If only the local iCal fallback is available, use it only for read-only event lookup.
+Use the Composio Google Calendar tools to create, update, delete, and answer questions about events, schedule, time windows, and availability. If only the local iCal fallback is available, use it only for read-only event lookup.
 
-When backed by Composio, use tools named like `mcp__composio__GOOGLECALENDAR_LIST_EVENTS`, `mcp__composio__GOOGLECALENDAR_CREATE_EVENT`, `mcp__composio__GOOGLECALENDAR_UPDATE_EVENT`, and `mcp__composio__GOOGLECALENDAR_DELETE_EVENT`. When backed by the iCal fallback, only `mcp__calendar__get_calendar_events` is available. Do not use Google Calendar tools exposed by a generic `mcp__calendar__...` server; this project routes Google Calendar through Composio.
+When backed by Composio, use tools named like `mcp__composio__GOOGLECALENDAR_EVENTS_LIST_ALL_CALENDARS`, `mcp__composio__GOOGLECALENDAR_EVENTS_LIST`, `mcp__composio__GOOGLECALENDAR_CREATE_EVENT`, `mcp__composio__GOOGLECALENDAR_PATCH_EVENT`, `mcp__composio__GOOGLECALENDAR_UPDATE_EVENT`, and `mcp__composio__GOOGLECALENDAR_DELETE_EVENT`. These tools are Pi custom tool adapters that execute Composio actions; pass the Composio action parameters inside the tool's `arguments` object. When backed by the iCal fallback, only `mcp__calendar__get_calendar_events` is available. Do not use Google Calendar tools exposed by a generic `mcp__calendar__...` server; this project routes Google Calendar through Composio.
 
 ## Responsibilities
 
@@ -29,13 +29,14 @@ When the user asks to add a calendar event:
 
 1. Resolve relative dates and times from the `[Context: ...]` line.
 2. Use the available `mcp__composio__GOOGLECALENDAR_CREATE_EVENT` tool if it is exposed.
-3. If the user does not give a duration, default to 30 minutes.
-4. If the user says "no reminder" or "no reminders", disable reminders/notifications using the tool's supported parameter.
-5. Do not add participants unless the user explicitly names attendees.
-6. Do not add a Google Meet link unless the user explicitly asks for one.
-7. Confirm the event title, date, and time after creation.
+3. Put all Composio action parameters under `arguments`.
+4. If the user does not give a duration, default to 30 minutes.
+5. If the user says "no reminder" or "no reminders", disable reminders/notifications using the tool's supported parameter.
+6. Do not add participants unless the user explicitly names attendees.
+7. Do not add a Google Meet link unless the user explicitly asks for one.
+8. Confirm the event title, date, and time after creation.
 
-Calendar MCP tools appear directly in your active tool list when the server is connected — a second Skill invocation will not make them visible. If no `mcp__composio__*` tools appear in your tool list when this skill runs, report immediately that calendar writes are unavailable in this session and stop. The `mcp__calendar__get_calendar_events` fallback is read-only.
+Calendar tools appear directly in your active tool list when the runtime is configured; a second Skill invocation will not make them visible. If no `mcp__composio__*` tools appear in your tool list when this skill runs, report immediately that calendar writes are unavailable in this session and stop. The `mcp__calendar__get_calendar_events` fallback is read-only.
 
 ## User Context
 

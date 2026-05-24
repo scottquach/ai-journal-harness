@@ -7,10 +7,8 @@ import { createParentAgentRunner } from './src/parent-agent.js';
 import { setupBot } from './src/bot-setup.js';
 import { scheduleJobs } from './src/job-scheduler.js';
 import { createTranscriber } from './src/transcribe.js';
-import { createCalendarTools } from './src/mcp/calendar.js';
 import { createDynamicScheduler, type DynamicSchedulerDeps } from './src/dynamic-scheduler.js';
-import { createSchedulerTools } from './src/mcp/scheduler.js';
-import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { createParentTools } from './src/parent-tools.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -34,15 +32,16 @@ const schedulerDeps: DynamicSchedulerDeps = {
 };
 const dynamicScheduler = createDynamicScheduler(schedulerDeps);
 
-const tools: ToolDefinition[] = [];
-if (process.env.COMPOSIO_CONSUMER_API_KEY) {
-    console.warn('[pi] COMPOSIO_CONSUMER_API_KEY is configured, but Composio MCP is not wired through Pi yet.');
-} else if (process.env.ICAL_URLS) {
-    const urls = process.env.ICAL_URLS.split(',').map((u) => u.trim()).filter(Boolean);
-    const labels = (process.env.ICAL_LABELS || '').split(',').map((l) => l.trim());
-    tools.push(...createCalendarTools(urls, labels));
-}
-tools.push(...createSchedulerTools(dynamicScheduler));
+const tools = createParentTools(
+    {
+        composioApiKey: process.env.COMPOSIO_API_KEY,
+        composioConsumerApiKey: process.env.COMPOSIO_CONSUMER_API_KEY,
+        composioUserId: process.env.COMPOSIO_USER_ID ?? process.env.DEFAULT_CHAT_ID,
+        icalLabels: process.env.ICAL_LABELS,
+        icalUrls: process.env.ICAL_URLS,
+    },
+    dynamicScheduler,
+);
 console.log(`[pi] configured tools: ${tools.map((tool) => tool.name).join(', ') || 'none'}`);
 
 const runParentAgent = createParentAgentRunner({ parent, tools });
