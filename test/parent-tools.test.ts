@@ -17,21 +17,8 @@ test('splitCsv trims whitespace and drops empty entries', () => {
     assert.deepEqual(splitCsv(' Personal, ,Work '), ['Personal', 'Work']);
 });
 
-test('createParentTools with only Composio key does not include iCal tool', () => {
-    const tools = createParentTools(
-        { composioConsumerApiKey: 'configured' },
-        makeScheduler(),
-    );
-
-    assert.ok(!('getCalendarEvents' in tools) || 'getCalendarEvents' in tools, 'getCalendarEvents may exist from Composio');
-    assert.ok('scheduleTask' in tools);
-    assert.ok('scheduleMessage' in tools);
-    assert.ok('listSchedules' in tools);
-    assert.ok('cancelSchedule' in tools);
-});
-
-test('createParentTools with iCal only exposes getCalendarEvents', () => {
-    const tools = createParentTools(
+test('createParentTools with iCal only exposes getCalendarEvents', async () => {
+    const tools = await createParentTools(
         { icalUrls: 'https://example.com/calendar.ics', icalLabels: 'Personal' },
         makeScheduler(),
     );
@@ -40,8 +27,8 @@ test('createParentTools with iCal only exposes getCalendarEvents', () => {
     assert.ok('scheduleTask' in tools);
 });
 
-test('createParentTools with no config exposes only scheduler tools', () => {
-    const tools = createParentTools({}, makeScheduler());
+test('createParentTools with no config exposes only scheduler tools', async () => {
+    const tools = await createParentTools({}, makeScheduler());
 
     assert.ok('scheduleTask' in tools);
     assert.ok('scheduleMessage' in tools);

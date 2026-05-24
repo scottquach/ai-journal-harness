@@ -21,14 +21,14 @@ function splitCsv(value: string | undefined): string[] {
         .filter(Boolean);
 }
 
-function createParentTools(config: ParentToolConfig, dynamicScheduler: DynamicScheduler): ParentTools {
+async function createParentTools(config: ParentToolConfig, dynamicScheduler: DynamicScheduler): Promise<ParentTools> {
     const tools: ParentTools = {};
     const composioApiKey = config.composioApiKey ?? config.composioConsumerApiKey;
 
     if (composioApiKey) {
         Object.assign(
             tools,
-            createComposioCalendarTools({
+            await createComposioCalendarTools({
                 apiKey: composioApiKey,
                 userId: config.composioUserId,
             }),

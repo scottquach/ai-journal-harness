@@ -163,6 +163,7 @@ function createParentAgentRunner({
     const modelSpec = process.env.AI_MODEL ?? process.env.PI_MODEL ?? DEFAULT_MODEL_SPEC;
     const modelId = resolveModelId(modelSpec);
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+    console.log("model Id", modelId)
     const model = openrouter(modelId);
 
     const skills = loadSkills();
@@ -198,6 +199,9 @@ function createParentAgentRunner({
         }
 
         const allTools = { ...vwcTools, ...domainTools };
+
+        console.log("system prompt", systemPrompt)
+        console.log("all tools", allTools);
 
         let output = '';
         try {

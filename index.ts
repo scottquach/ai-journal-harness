@@ -32,7 +32,7 @@ const schedulerDeps: DynamicSchedulerDeps = {
 };
 const dynamicScheduler = createDynamicScheduler(schedulerDeps);
 
-const tools = createParentTools(
+const tools = await createParentTools(
     {
         composioApiKey: process.env.COMPOSIO_API_KEY,
         composioConsumerApiKey: process.env.COMPOSIO_CONSUMER_API_KEY,
