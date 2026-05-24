@@ -1,8 +1,8 @@
 import nodeCron from 'node-cron';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { DispatchTurn } from './dispatch-turn.js';
-import type { CronLike } from './job-scheduler.js';
+import type { CronLike, RunParentAgent } from './job-scheduler.js';
+import { isSkipOutput } from './skip-output.js';
 import { markdownToTelegramHtml } from './telegram-format.js';
 
 type TelegramBotLike = {
@@ -42,7 +42,7 @@ type DynamicMessageInput = DynamicScheduleInput & {
 
 type DynamicSchedulerDeps = {
     bot: TelegramBotLike;
-    dispatchTurn: DispatchTurn | null;
+    runParentAgent: RunParentAgent | null;
     defaultChatId?: string;
     persistPath: string;
     persistMirrorPath?: string;
@@ -204,17 +204,21 @@ function createDynamicScheduler(deps: DynamicSchedulerDeps): DynamicScheduler {
                             .catch((err) => console.error(`[scheduler] telegram send failed: ${getErrorMessage(err)}`));
                     }
                 } else {
-                    if (!deps.dispatchTurn) {
-                        throw new Error('dispatchTurn not yet available');
+                    if (!deps.runParentAgent) {
+                        throw new Error('runParentAgent not yet available');
                     }
-                    await deps.dispatchTurn({
+                    const { output } = await deps.runParentAgent({
                         source: 'scheduler',
                         chatId: chatId ?? 'global',
-                        input: record.prompt ?? '',
-                        deliverTo: chatId ?? null,
-                        errorLabel: `Scheduled task "${record.label ?? record.id}"`,
+                        prompt: record.prompt ?? '',
                         jobName: record.id,
                     });
+                    const shouldSkip = isSkipOutput(output);
+                    if (chatId && output && !shouldSkip) {
+                        await deps.bot.telegram
+                            .sendMessage(chatId, markdownToTelegramHtml(output), { parse_mode: 'HTML' })
+                            .catch((err) => console.error(`[scheduler] telegram send failed: ${getErrorMessage(err)}`));
+                    }
                 }
             } catch (err) {
                 console.error(`[scheduler] failed: ${record.id} — ${getErrorMessage(err)}`);

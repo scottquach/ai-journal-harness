@@ -2,7 +2,7 @@
 name: strava
 description: Use for Strava activity lookups, fitness stats, workout summaries, and workout facts for journal logging.
 tools:
-  - Read
+  - read
   - mcp__strava__*
 ---
 

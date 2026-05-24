@@ -1,8 +1,8 @@
-import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
+import { defineTool } from '@earendil-works/pi-coding-agent';
+import { Type } from '@earendil-works/pi-ai';
 import { TZDate } from '@date-fns/tz';
 import { addDays, endOfDay, startOfDay } from 'date-fns';
 import ical from 'node-ical';
-import { z } from 'zod';
 
 type ParsedCalendar = Record<string, any>;
 
@@ -186,60 +186,48 @@ async function fetchCalendarEvents(urls: string[], labels: string[], options: Ca
 }
 
 /**
- * Create an in-process MCP server that exposes a get_calendar_events tool.
+ * Create an in-process Pi tool that exposes calendar events.
  *
  * @param {string[]} urls - iCal feed URLs
  * @param {string[]} labels - Human-readable labels for each URL
  * @returns {McpSdkServerConfigWithInstance}
  */
-function createCalendarServer(urls: string[], labels: string[]) {
-    return createSdkMcpServer({
-        name: 'calendar',
-        version: '1.0.0',
-        tools: [
-            tool(
-                'get_calendar_events',
-                'Fetch upcoming calendar events from all configured calendars. Returns a merged, sorted list of events.',
-                {
-                    days_ahead: z.number().optional().describe('Number of days into the future to fetch (default: 14)'),
-                    start_date: z
-                        .string()
-                        .optional()
-                        .describe('Date for range start: YYYY-MM-DD, today, or tomorrow. Defaults to today.'),
-                    end_date: z
-                        .string()
-                        .optional()
-                        .describe('Date for range end: YYYY-MM-DD, today, or tomorrow. Overrides days_ahead if provided.'),
-                    search: z
-                        .string()
-                        .optional()
-                        .describe('Case-insensitive text filter on event title and description'),
-                },
-                async (args) => {
-                    const { events, warnings } = await fetchCalendarEvents(urls, labels, {
-                        daysAhead: args.days_ahead,
-                        startDate: args.start_date,
-                        endDate: args.end_date,
-                        search: args.search,
-                    });
+function createCalendarTools(urls: string[], labels: string[]) {
+    return [
+        defineTool({
+            name: 'mcp__calendar__get_calendar_events',
+            label: 'Get Calendar Events',
+            description: 'Fetch upcoming calendar events from all configured calendars. Returns a merged, sorted list of events.',
+            parameters: Type.Object({
+                days_ahead: Type.Optional(Type.Number({ description: 'Number of days into the future to fetch (default: 14)' })),
+                start_date: Type.Optional(Type.String({ description: 'Date for range start: YYYY-MM-DD, today, or tomorrow. Defaults to today.' })),
+                end_date: Type.Optional(Type.String({ description: 'Date for range end: YYYY-MM-DD, today, or tomorrow. Overrides days_ahead if provided.' })),
+                search: Type.Optional(Type.String({ description: 'Case-insensitive text filter on event title and description' })),
+            }),
+            execute: async (_toolCallId, args) => {
+                const { events, warnings } = await fetchCalendarEvents(urls, labels, {
+                    daysAhead: args.days_ahead,
+                    startDate: args.start_date,
+                    endDate: args.end_date,
+                    search: args.search,
+                });
 
-                    let text = JSON.stringify(events, null, 2);
-                    if (warnings.length > 0) {
-                        text += '\n\nWarnings:\n' + warnings.map((w) => `- ${w}`).join('\n');
-                    }
-                    if (events.length === 0 && warnings.length === 0) {
-                        text = 'No events found in the requested date range.';
-                    }
+                let text = JSON.stringify(events, null, 2);
+                if (warnings.length > 0) {
+                    text += '\n\nWarnings:\n' + warnings.map((w) => `- ${w}`).join('\n');
+                }
+                if (events.length === 0 && warnings.length === 0) {
+                    text = 'No events found in the requested date range.';
+                }
 
-                    return { content: [{ type: 'text', text }] };
-                },
-            ),
-        ],
-    });
+                return { content: [{ type: 'text' as const, text }], details: {} };
+            },
+        }),
+    ];
 }
 
 export {
-    createCalendarServer,
+    createCalendarTools,
     fetchCalendarEvents,
     extractEvents,
 };

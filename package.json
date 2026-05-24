@@ -13,16 +13,16 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.81",
     "@date-fns/tz": "^1.4.1",
+    "@earendil-works/pi-ai": "0.75.5",
+    "@earendil-works/pi-coding-agent": "0.75.5",
     "date-fns": "^4.1.0",
     "dotenv": "^17.3.1",
     "node-cron": "^4.2.1",
     "node-ical": "^0.25.6",
     "openai": "^6.29.0",
     "telegraf": "^4.16.3",
-    "yaml": "^2.8.2",
-    "zod": "^4.4.2"
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

@@ -35,7 +35,7 @@ Resolve requests with the fewest steps that preserve correctness.
 1. Read `Current input` and the `[Context: ...]` line.
 2. If answerable without tools or vault state, answer directly.
 3. Otherwise use the loaded skill whose description matches the request.
-4. For targeted vault lookup not covered by a skill, use `Read`/`Glob`/`Grep`/`LS` with specific paths. No open-ended crawls.
+4. For targeted vault lookup not covered by a skill, use `read`/`find`/`grep`/`ls` with specific paths. No open-ended crawls.
 5. If a needed integration is unavailable, say so briefly and finish what you can.
 
 Skill selection is by skill description — trust it. If a request spans skills, use each and merge results. If ambiguous between journal and tasks, prefer journal.

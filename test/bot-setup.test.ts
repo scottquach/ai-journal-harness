@@ -43,7 +43,7 @@ test('setupBot registers a bot.catch handler that logs timeout context', async (
     };
 
     setupBot(telegramBot, {
-        dispatchTurn: async () => ({ output: 'ok', delivered: true, skipped: false }),
+        runParentAgent: async () => ({ output: 'ok' }),
         transcribeVoice: async () => 'voice',
     });
 
@@ -76,4 +76,54 @@ test('setupBot registers a bot.catch handler that logs timeout context', async (
     assert.match(calls[0], /chatId=42/);
     assert.match(calls[0], /userId=7/);
     assert.match(calls[1], /may still be running/);
+});
+
+test('text handler reports empty agent output without sending an empty Telegram message', async () => {
+    const registrations: {
+        catch: CatchHandler | null;
+        handlers: Map<unknown, BotHandler>;
+        start: BotHandler | null;
+        help: BotHandler | null;
+    } = { catch: null, handlers: new Map(), start: null, help: null };
+    const telegramBot = {
+        catch(handler: CatchHandler) {
+            registrations.catch = handler;
+        },
+        on(filter: unknown, handler: BotHandler) {
+            registrations.handlers.set(filter, handler);
+        },
+        start(handler: BotHandler) {
+            registrations.start = handler;
+        },
+        help(handler: BotHandler) {
+            registrations.help = handler;
+        },
+    };
+    const replies: string[] = [];
+
+    setupBot(telegramBot, {
+        runParentAgent: async () => ({ output: '' }),
+        transcribeVoice: async () => 'voice',
+    });
+
+    const originalConsoleError = console.error;
+    console.error = () => {};
+
+    try {
+        const textHandler = Array.from(registrations.handlers.values())[0];
+        assert.equal(typeof textHandler, 'function');
+        await textHandler({
+            chat: { id: 42 },
+            from: { id: 7 },
+            message: { text: 'hi' },
+            reply: (text: string) => {
+                replies.push(text);
+            },
+            update: { update_id: 99 },
+        } as BotContext);
+    } finally {
+        console.error = originalConsoleError;
+    }
+
+    assert.deepEqual(replies, ['Something went wrong: Agent returned an empty response']);
 });

@@ -2,7 +2,7 @@
 name: task-review
 description: "Use for read-only task management: task status checks, task lists, counts, rollover analysis, and task workload summaries."
 tools:
-  - Read
+  - read
 ---
 
 # Task Review Skill

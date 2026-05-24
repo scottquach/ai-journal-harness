@@ -2,9 +2,9 @@
 name: journal
 description: Use for journal capture, task logging, grocery updates, mood/event logging, and vault-writing workflows.
 tools:
-  - Read
-  - Write
-  - Edit
+  - read
+  - write
+  - edit
 ---
 
 # Journal Skill

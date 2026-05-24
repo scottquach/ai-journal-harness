@@ -11,7 +11,11 @@
       "Bash(Select-Object -Property FullName, PSIsContainer)",
       "Bash(Sort-Object FullName)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\scott\\\\Repositories\\\\claude-librarian\" -Force)",
-      "Bash(Select-Object Name, PSIsContainer)"
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(awk -F: '{if \\($1 > 7938\\) print}')",
+      "Bash(git stash *)",
+      "Bash(git pull *)",
+      "Bash(git add *)"
     ]
   }
 }

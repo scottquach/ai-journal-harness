@@ -1,5 +1,6 @@
 import { message } from 'telegraf/filters';
-import type { DispatchTurn } from './dispatch-turn.js';
+import type { RunParentAgent } from './job-scheduler.js';
+import { markdownToTelegramHtml } from './telegram-format.js';
 
 type BotContext = {
     chat?: { id?: string | number };
@@ -18,7 +19,7 @@ type BotContext = {
 };
 
 type BotSetupDeps = {
-    dispatchTurn: DispatchTurn;
+    runParentAgent: RunParentAgent;
     transcribeVoice: (ctx: BotContext) => Promise<string>;
 };
 
@@ -55,21 +56,38 @@ function describeUpdate(ctx: BotContext) {
     };
 }
 
-async function handleMessage(ctx: BotContext, text: string, dispatchTurn: DispatchTurn) {
+async function handleMessage(ctx: BotContext, text: string, { runParentAgent }: Omit<BotSetupDeps, 'transcribeVoice'>) {
     const { chatId, updateId } = describeUpdate(ctx);
     const username = ctx.from?.username ?? ctx.from?.id ?? 'unknown';
+    const startedAt = Date.now();
 
     console.log(`[message] from user=${username} chatId=${chatId} updateId=${updateId}`);
 
-    await dispatchTurn({
-        source: 'telegram',
-        chatId,
-        input: text,
-        deliverTo: chatId,
-    });
+    try {
+        console.log(`[claude] runParentAgent started chatId=${chatId} updateId=${updateId}`);
+        const { output } = await runParentAgent({
+            chatId,
+            prompt: text,
+            source: 'telegram',
+        });
+        console.log(
+            `[claude] succeeded chatId=${chatId} updateId=${updateId} outputLength=${output.length} durationMs=${Date.now() - startedAt}`,
+        );
+        const replyText = markdownToTelegramHtml(output).trim();
+        if (!replyText) {
+            throw new Error('Agent returned an empty response');
+        }
+        await ctx.reply(replyText, { parse_mode: 'HTML' });
+    } catch (error) {
+        console.error(
+            `[claude] failed chatId=${chatId} updateId=${updateId} durationMs=${Date.now() - startedAt} error=${getErrorMessage(error)}`,
+            getErrorStack(error),
+        );
+        await ctx.reply('Something went wrong: ' + getErrorMessage(error));
+    }
 }
 
-function setupBot(telegramBot: TelegramBotLike, { dispatchTurn, transcribeVoice }: BotSetupDeps): void {
+function setupBot(telegramBot: TelegramBotLike, { runParentAgent, transcribeVoice }: BotSetupDeps): void {
     telegramBot.catch((error: unknown, ctx: BotContext) => {
         const { chatId, updateId, userId } = describeUpdate(ctx);
         const prefix = isHandlerTimeoutError(error) ? '[telegram] handler timeout' : '[telegram] unhandled bot error';
@@ -83,7 +101,7 @@ function setupBot(telegramBot: TelegramBotLike, { dispatchTurn, transcribeVoice 
     });
 
     telegramBot.on(message('text'), (ctx) => {
-        return handleMessage(ctx, ctx.message.text ?? '', dispatchTurn);
+        return handleMessage(ctx, ctx.message.text ?? '', { runParentAgent });
     });
 
     telegramBot.on(message('voice'), async (ctx) => {
@@ -103,7 +121,7 @@ function setupBot(telegramBot: TelegramBotLike, { dispatchTurn, transcribeVoice 
             return;
         }
 
-        await handleMessage(ctx, transcript, dispatchTurn);
+        await handleMessage(ctx, transcript, { runParentAgent });
     });
 
     telegramBot.start((ctx) => ctx.reply('Welcome'));

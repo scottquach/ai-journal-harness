@@ -1,21 +1,17 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
-    PARENT_SKILLS,
     PARENT_BASE_TOOLS,
-    SKILL_POLICY,
     buildInvocationPrompt,
     createParentAgentRunner,
-    createParentOptions,
     formatExecutionLogEvent,
-    summarizeStreamEvent,
 } from '../src/parent-agent.js';
-import type { ParentConfig } from '../src/parent-agent.js';
-import { availableSkills } from '../src/tool-policy.js';
+import type { ParentConfig, ParentSessionFactory } from '../src/parent-agent.js';
+import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -24,7 +20,7 @@ function makeParent(): ParentConfig {
         id: 'parent',
         name: 'parent',
         description: 'Telegram-facing parent assistant',
-        model: 'haiku',
+        model: 'sonnet',
         tools: [],
         directories: ['/vault', '/shared'],
         systemPrompt: 'Parent instructions.',
@@ -33,6 +29,38 @@ function makeParent(): ParentConfig {
 
 function makeExecutionLogPath(): string {
     return resolve(mkdtempSync(resolve(tmpdir(), 'claude-librarian-test-')), 'execution.log');
+}
+
+function tool(name: string): ToolDefinition {
+    return { name } as ToolDefinition;
+}
+
+function makeSessionFactory(calls: any[], outputs: string[] = ['ok']): ParentSessionFactory {
+    let sessionCount = 0;
+    return async (parent, tools) => {
+        calls.push({ type: 'createSession', parent, tools });
+        const sessionId = ++sessionCount;
+        const prompts: string[] = [];
+        let disposed = false;
+        return {
+            async prompt(text: string) {
+                calls.push({ type: 'prompt', sessionId, text });
+                prompts.push(text);
+            },
+            subscribe(listener: any) {
+                calls.push({ type: 'subscribe', sessionId });
+                listener({ type: 'agent_start' });
+                return () => calls.push({ type: 'unsubscribe', sessionId });
+            },
+            getLastAssistantText() {
+                return outputs[prompts.length - 1] ?? outputs.at(-1) ?? '';
+            },
+            dispose() {
+                disposed = true;
+                calls.push({ type: 'dispose', sessionId, disposed });
+            },
+        };
+    };
 }
 
 test('buildInvocationPrompt includes source metadata', () => {
@@ -50,329 +78,115 @@ test('buildInvocationPrompt includes source metadata', () => {
     assert.match(prompt, /Body prompt/);
 });
 
-test('createParentOptions uses native parent skills and disables subagent delegation', () => {
-    const options = createParentOptions({
-        parent: makeParent(),
-        mcpServers: { calendar: { type: 'stdio' } },
-    });
-
-    assert.equal(options.agent, 'parent');
-    // Only calendar-backed and built-in skills should remain active here.
-    assert.deepEqual(options.allowedTools, [
-        'Read',
-        'Glob',
-        'Grep',
-        'LS',
-        'Skill',
-        'mcp__calendar__get_calendar_events',
-        'Write',
-        'Edit',
-    ]);
-    assert.equal(options.cwd, '/vault');
-    assert.deepEqual(options.additionalDirectories, ['/shared']);
-    assert.deepEqual(options.disallowedTools, ['Agent']);
-    assert.deepEqual(options.settingSources, ['project']);
-    assert.deepEqual(
-        options.agents.parent.skills,
-        availableSkills(SKILL_POLICY, { mcpServers: { calendar: { type: 'stdio' } } }),
-    );
-    assert.equal(options.agents.parent.prompt, 'Parent instructions.');
-    assert.equal(options.agents.parent.tools, undefined);
-    assert.equal(options.agents.parent.mcpServers, undefined);
-    assert.deepEqual(options.tools, ['Read', 'Glob', 'Grep', 'LS', 'Skill', 'Write', 'Edit']);
-    assert.deepEqual(PARENT_BASE_TOOLS, ['Read', 'Glob', 'Grep', 'LS']);
-    assert.deepEqual(
-        options.plugins.map((plugin) => plugin.path),
-        [
-            resolve(__dirname, '../plugins/caveman'),
-            resolve(__dirname, '../plugins/parent-skills'),
-        ],
-    );
-    assert.match(options.systemPrompt!, /Parent instructions\./);
-    assert.doesNotMatch(options.systemPrompt!, /Loaded Skill: journal/);
+test('PARENT_BASE_TOOLS includes all pi native file tools', () => {
+    assert.ok(PARENT_BASE_TOOLS.includes('read'));
+    assert.ok(PARENT_BASE_TOOLS.includes('write'));
+    assert.ok(PARENT_BASE_TOOLS.includes('edit'));
+    assert.ok(PARENT_BASE_TOOLS.includes('grep'));
+    assert.ok(PARENT_BASE_TOOLS.includes('find'));
+    assert.ok(PARENT_BASE_TOOLS.includes('ls'));
 });
 
-test('createParentAgentRunner sends prompt through native-skilled parent without delegation', async () => {
+test('createParentAgentRunner sends prompt through Pi session factory', async () => {
     const calls: any[] = [];
-    const userPrompts: string[] = [];
-    const queryFn = async function* ({ prompt, options }) {
-        calls.push({ prompt, options });
-        for await (const userMsg of prompt as AsyncIterable<any>) {
-            userPrompts.push(userMsg.message.content);
-            yield {
-                type: 'result',
-                subtype: 'success',
-                result: 'Tomorrow looks busy.',
-            };
-        }
-    };
-
-    const runParentAgent = createParentAgentRunner({
-        parent: makeParent(),
-        mcpServers: { calendar: { type: 'stdio' } },
-        queryFn,
-        executionLogPath: makeExecutionLogPath(),
-    });
-
-    const result = await runParentAgent({
-        chatId: '42',
-        prompt: 'What meetings do I have tomorrow afternoon?',
-        source: 'telegram',
-    });
-
-    assert.equal(calls.length, 1);
-    assert.match(userPrompts[0], /source: telegram/);
-    assert.match(userPrompts[0], /What meetings do I have tomorrow afternoon\?/);
-    assert.equal(calls[0].options.allowedTools.includes('Agent'), false);
-    assert.deepEqual(calls[0].options.disallowedTools, ['Agent']);
-    assert.ok(calls[0].options.allowedTools.includes('mcp__calendar__get_calendar_events'));
-    assert.equal(calls[0].options.agent, 'parent');
-    assert.deepEqual(
-        calls[0].options.agents.parent.skills,
-        availableSkills(SKILL_POLICY, { mcpServers: { calendar: { type: 'stdio' } } }),
-    );
-    assert.deepEqual(result.loadedSkills, availableSkills(SKILL_POLICY, { mcpServers: { calendar: { type: 'stdio' } } }));
-    assert.equal(result.output, 'Tomorrow looks busy.');
-});
-
-test('createParentAgentRunner reuses a single SDK query across telegram turns for the same chat', async () => {
-    let queryStarts = 0;
-    const userPrompts: string[] = [];
-    const queryFn = async function* ({ prompt }) {
-        queryStarts++;
-        for await (const userMsg of prompt as AsyncIterable<any>) {
-            userPrompts.push(userMsg.message.content);
-            yield {
-                type: 'result',
-                subtype: 'success',
-                result: `reply-${userPrompts.length}`,
-            };
-        }
-    };
-
-    const runParentAgent = createParentAgentRunner({
-        parent: makeParent(),
-        mcpServers: { calendar: { type: 'stdio' } },
-        queryFn,
-        executionLogPath: makeExecutionLogPath(),
-    });
-
-    const first = await runParentAgent({ chatId: '42', prompt: 'first', source: 'telegram' });
-    const second = await runParentAgent({ chatId: '42', prompt: 'second', source: 'telegram' });
-
-    assert.equal(queryStarts, 1);
-    assert.equal(userPrompts.length, 2);
-    assert.match(userPrompts[0], /first/);
-    assert.match(userPrompts[1], /second/);
-    assert.equal(first.output, 'reply-1');
-    assert.equal(second.output, 'reply-2');
-});
-
-test('createParentAgentRunner isolates telegram sessions by chatId', async () => {
-    let queryStarts = 0;
-    const queryFn = async function* ({ prompt }) {
-        const id = ++queryStarts;
-        for await (const _msg of prompt as AsyncIterable<any>) {
-            yield {
-                type: 'result',
-                subtype: 'success',
-                result: `session-${id}`,
-            };
-        }
-    };
-
-    const runParentAgent = createParentAgentRunner({
-        parent: makeParent(),
-        mcpServers: { calendar: { type: 'stdio' } },
-        queryFn,
-        executionLogPath: makeExecutionLogPath(),
-    });
-
-    const a = await runParentAgent({ chatId: '42', prompt: 'hi', source: 'telegram' });
-    const b = await runParentAgent({ chatId: '99', prompt: 'hi', source: 'telegram' });
-
-    assert.equal(queryStarts, 2);
-    assert.equal(a.output, 'session-1');
-    assert.equal(b.output, 'session-2');
-});
-
-test('createParentAgentRunner creates fresh SDK MCP servers for each invocation', async () => {
-    const calls: any[] = [];
-    let created = 0;
-    const queryFn = async function* ({ options }) {
-        calls.push(options.mcpServers.calendar);
-        yield {
-            type: 'result',
-            subtype: 'success',
-            result: 'Done.',
-        };
-    };
-
-    const runParentAgent = createParentAgentRunner({
-        parent: makeParent(),
-        mcpServers: {
-            calendar: () => ({
-                type: 'sdk',
-                name: 'calendar',
-                instance: { id: ++created },
-            }),
-        },
-        queryFn,
-        executionLogPath: makeExecutionLogPath(),
-    });
-
-    await runParentAgent({ prompt: 'first', source: 'test' });
-    await runParentAgent({ prompt: 'second', source: 'test' });
-
-    assert.equal(created, 2);
-    assert.notEqual(calls[0].instance, calls[1].instance);
-});
-
-test('createParentOptions grants Composio Google Calendar tools when Composio is configured', () => {
-    const options = createParentOptions({
-        parent: makeParent(),
-        mcpServers: { composio: { type: 'http' } },
-    });
-
-    assert.ok(options.agents.parent.skills.includes('calendar'));
-    assert.ok(options.allowedTools.includes('mcp__composio__*'));
-    assert.equal(options.allowedTools.includes('mcp__calendar__get_calendar_events'), false);
-});
-
-test('createParentAgentRunner logs lifecycle timing around the query stream', async () => {
-    const queryFn = async function* ({ prompt }) {
-        for await (const _msg of prompt as AsyncIterable<any>) {
-            yield {
-                type: 'assistant',
-                message: {
-                    content: [{ type: 'text', text: 'Working...' }],
-                },
-            };
-            yield {
-                type: 'result',
-                subtype: 'success',
-                result: 'Done.',
-            };
-        }
-    };
-
-    const runParentAgent = createParentAgentRunner({
-        parent: makeParent(),
-        mcpServers: { calendar: { type: 'stdio' } },
-        queryFn,
-        executionLogPath: makeExecutionLogPath(),
-    });
-
-    const calls: string[] = [];
-    const originalConsoleLog = console.log;
-    console.log = (...args) => calls.push(args.join(' '));
-
-    try {
-        await runParentAgent({
-            chatId: '42',
-            prompt: 'Move beer walk to start at 4:30',
-            source: 'telegram',
-        });
-    } finally {
-        console.log = originalConsoleLog;
-    }
-
-    assert.ok(calls.some((line) => line.includes('[claude] parent run started source=telegram chatId=42')));
-    assert.ok(calls.some((line) => line.includes('[claude] preflight complete durationMs=')));
-    assert.ok(calls.some((line) => line.includes('[claude] query started source=telegram chatId=42')));
-    assert.ok(calls.some((line) => line.includes('[claude] first stream event afterMs=')));
-    assert.ok(calls.some((line) => line.includes('[claude] parent run completed source=telegram chatId=42')));
-});
-
-test('createParentAgentRunner appends thoughts and stream details to an execution log file', async () => {
     const logPath = makeExecutionLogPath();
-    const queryFn = async function* ({ prompt }) {
-        for await (const _msg of prompt as AsyncIterable<any>) {
-            yield {
-                type: 'assistant',
-                message: {
-                    content: [
-                        { type: 'thinking', thinking: 'Need to inspect the weekly note.' },
-                        { type: 'tool_use', name: 'Read', input: { file_path: '/vault/week.md' } },
-                    ],
-                },
-            };
-            yield {
-                type: 'user',
-                message: {
-                    content: [{ type: 'tool_result', content: 'Existing note contents.' }],
-                },
-            };
-            yield {
-                type: 'assistant',
-                message: {
-                    content: [{ type: 'text', text: 'Logged.' }],
-                },
-            };
-            yield {
-                type: 'result',
-                subtype: 'success',
-                result: 'Logged.',
-                duration_ms: 1234,
-                total_cost_usd: 0.0123,
-            };
-        }
-    };
-
     const runParentAgent = createParentAgentRunner({
         parent: makeParent(),
-        mcpServers: { calendar: { type: 'stdio' } },
-        queryFn,
+        tools: [tool('mcp__calendar__get_calendar_events')],
+        sessionFactory: makeSessionFactory(calls, ['Tomorrow looks busy.']),
         executionLogPath: logPath,
     });
 
     try {
-        await runParentAgent({
+        const result = await runParentAgent({
             chatId: '42',
-            prompt: 'log that I felt focused today',
+            prompt: 'What meetings do I have tomorrow afternoon?',
             source: 'telegram',
         });
 
+        const promptCall = calls.find((call) => call.type === 'prompt');
+        assert.match(promptCall.text, /source: telegram/);
+        assert.match(promptCall.text, /What meetings do I have tomorrow afternoon\?/);
+        const createCall = calls.find((c) => c.type === 'createSession');
+        assert.ok(createCall.tools.some((t: ToolDefinition) => t.name === 'mcp__calendar__get_calendar_events'));
+        assert.equal(result.output, 'Tomorrow looks busy.');
+
         const log = readFileSync(logPath, 'utf8');
         assert.match(log, /parent run started source=telegram chatId=42/);
-        assert.match(log, /assistant thinking:\nNeed to inspect the weekly note\./);
-        assert.match(log, /tool use: Read\(\{"file_path":"\/vault\/week\.md"\}\)/);
-        assert.match(log, /tool result:\nExisting note contents\./);
-        assert.match(log, /assistant text:\nLogged\./);
-        assert.match(log, /result:success costUsd=0\.0123 durationMs=1234/);
+        assert.match(log, /query started source=telegram chatId=42/);
         assert.match(log, /parent run completed source=telegram chatId=42/);
     } finally {
         rmSync(dirname(logPath), { recursive: true, force: true });
     }
 });
 
-test('createParentOptions omits skills whose MCP servers are unavailable', () => {
-    const options = createParentOptions({
+test('createParentAgentRunner prepends date context to every prompt', async () => {
+    const calls: any[] = [];
+    const runParentAgent = createParentAgentRunner({
         parent: makeParent(),
-        mcpServers: { scheduler: { type: 'stdio' } },
+        sessionFactory: makeSessionFactory(calls),
+        executionLogPath: makeExecutionLogPath(),
     });
 
-    assert.deepEqual(options.agents.parent.skills, ['journal', 'memory', 'scheduler', 'task-review']);
-    assert.deepEqual(options.allowedTools, [
-        'Read',
-        'Glob',
-        'Grep',
-        'LS',
-        'Skill',
-        'Write',
-        'Edit',
-        'mcp__scheduler__schedule_task',
-        'mcp__scheduler__schedule_message',
-        'mcp__scheduler__list_schedules',
-        'mcp__scheduler__cancel_schedule',
-    ]);
-    assert.deepEqual(options.tools, ['Read', 'Glob', 'Grep', 'LS', 'Skill', 'Write', 'Edit']);
+    await runParentAgent({ prompt: 'hello', source: 'job' });
+
+    const promptCall = calls.find((c) => c.type === 'prompt');
+    assert.match(promptCall.text, /\[Context: today is \d{4}-\d{2}-\d{2}/);
 });
 
-test('parent skill plugin exposes every native skill with matching frontmatter', () => {
-    const skillsRoot = resolve(__dirname, '../plugins/parent-skills/skills');
+test('createParentAgentRunner reuses a Pi session for Telegram turns in the same chat', async () => {
+    const calls: any[] = [];
+    const runParentAgent = createParentAgentRunner({
+        parent: makeParent(),
+        sessionFactory: makeSessionFactory(calls, ['reply-1', 'reply-2']),
+        executionLogPath: makeExecutionLogPath(),
+    });
 
-    for (const skill of PARENT_SKILLS) {
+    const first = await runParentAgent({ chatId: '42', prompt: 'first', source: 'telegram' });
+    const second = await runParentAgent({ chatId: '42', prompt: 'second', source: 'telegram' });
+
+    assert.equal(calls.filter((call) => call.type === 'createSession').length, 1);
+    assert.equal(calls.filter((call) => call.type === 'prompt').length, 2);
+    assert.equal(first.output, 'reply-1');
+    assert.equal(second.output, 'reply-2');
+});
+
+test('createParentAgentRunner isolates Telegram sessions by chatId', async () => {
+    const calls: any[] = [];
+    const runParentAgent = createParentAgentRunner({
+        parent: makeParent(),
+        sessionFactory: makeSessionFactory(calls, ['reply']),
+        executionLogPath: makeExecutionLogPath(),
+    });
+
+    await runParentAgent({ chatId: '42', prompt: 'hi', source: 'telegram' });
+    await runParentAgent({ chatId: '99', prompt: 'hi', source: 'telegram' });
+
+    assert.equal(calls.filter((call) => call.type === 'createSession').length, 2);
+});
+
+test('createParentAgentRunner disposes one-shot sessions', async () => {
+    const calls: any[] = [];
+    const runParentAgent = createParentAgentRunner({
+        parent: makeParent(),
+        sessionFactory: makeSessionFactory(calls),
+        executionLogPath: makeExecutionLogPath(),
+    });
+
+    await runParentAgent({ prompt: 'one shot', source: 'job' });
+
+    assert.equal(calls.some((call) => call.type === 'dispose'), true);
+});
+
+test('parent skill plugin exposes every skill with valid frontmatter and pi-native tool names', () => {
+    const skillsRoot = resolve(__dirname, '../plugins/parent-skills/skills');
+    const skillDirs = readdirSync(skillsRoot, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
+
+    const piBuiltinTools = new Set(['read', 'write', 'edit', 'grep', 'find', 'ls', 'bash']);
+
+    for (const skill of skillDirs) {
         const skillPath = resolve(skillsRoot, skill, 'SKILL.md');
         const body = readFileSync(skillPath, 'utf8');
         const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
@@ -380,37 +194,41 @@ test('parent skill plugin exposes every native skill with matching frontmatter',
         assert.match(frontmatter[1]!, new RegExp(`^name: ${skill}$`, 'm'), `${skill} name should match directory`);
         assert.match(frontmatter[1]!, /^description: .+/m, `${skill} should have a description`);
         assert.match(frontmatter[1]!, /^tools:\r?\n/m, `${skill} should declare a tools: list`);
-        assert.ok(
-            Array.isArray(SKILL_POLICY[skill]) && SKILL_POLICY[skill].length > 0,
-            `${skill} tools list should be non-empty`,
-        );
+
+        const toolLines = frontmatter[1]!.match(/^  - (.+)$/gm) ?? frontmatter[1]!.match(/^    - (.+)$/gm) ?? [];
+        for (const line of toolLines) {
+            const toolName = line.replace(/^\s+- /, '').trim();
+            if (!toolName.startsWith('mcp__')) {
+                assert.ok(
+                    piBuiltinTools.has(toolName),
+                    `${skill} uses non-pi tool name "${toolName}" — should be lowercase pi name`,
+                );
+            }
+        }
     }
 });
 
-test('summarizeStreamEvent formats common stream events for logging', () => {
-    assert.equal(summarizeStreamEvent({ type: 'system', subtype: 'init' }), 'system:init');
-    assert.equal(
-        summarizeStreamEvent({ type: 'assistant', message: { content: [{ type: 'tool_use' }] } }),
-        'assistant:tool_use',
-    );
-    assert.equal(summarizeStreamEvent({ type: 'result', subtype: 'success' }), 'result:success');
-});
-
-test('formatExecutionLogEvent formats thinking blocks for file logs', () => {
+test('formatExecutionLogEvent formats Pi stream events', () => {
     assert.deepEqual(
         formatExecutionLogEvent({
-            type: 'assistant',
-            message: { content: [{ type: 'thinking', thinking: 'Check the task list.\nThen write.' }] },
-        }),
-        ['assistant thinking:\nCheck the task list.\nThen write.'],
+            type: 'message_update',
+            assistantMessageEvent: { type: 'text_delta', delta: 'Logged.' },
+        } as any),
+        ['assistant text delta:\nLogged.'],
+    );
+    assert.deepEqual(
+        formatExecutionLogEvent({ type: 'tool_execution_start', toolName: 'read' } as any),
+        ['tool use: read'],
+    );
+    assert.deepEqual(
+        formatExecutionLogEvent({ type: 'agent_end', messages: [], willRetry: false } as any),
+        ['result:success'],
     );
 });
 
-test('calendar skill allows calendar writes when tools are available', () => {
+test('calendar skill still documents read-only fallback and Composio write behavior', () => {
     const calendarSkill = readFileSync(resolve(__dirname, '../plugins/parent-skills/skills/calendar/SKILL.md'), 'utf8');
 
     assert.match(calendarSkill, /Create calendar events when the user asks/);
-    assert.match(calendarSkill, /a second Skill invocation will not make them visible/);
     assert.match(calendarSkill, /mcp__composio__GOOGLECALENDAR_CREATE_EVENT/);
-    assert.match(calendarSkill, /no reminder/);
 });

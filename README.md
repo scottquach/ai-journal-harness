@@ -4,7 +4,7 @@ I wanted an easy way to stream my daily thoughts into my weekly/daily markdown j
 
 This projects provides a telegram bot that can handle both text + voice memos to reduce the friction of adding random thoughts, moods, tasks, events, grocery lists and notes into your weekly note. All within just a couple of easily modifiable files
 
-jobs/ can be used to define proactive jobs for claude to run such as weekly reviews, checks against your monthly/yearly goals, moving tasks when the next day starts, etc.
+jobs/ can be used to define proactive jobs for the agent to run such as weekly reviews, checks against your monthly/yearly goals, moving tasks when the next day starts, etc.
 
 The assistant also has the ability to dynamically schedule it's own jobs on user request or based in it's own insights.
 
@@ -12,15 +12,10 @@ The whole project can be fully hosted locally or on your own VPC.
 
 ## What it does
 
-- **Text + voice logging** — send a text or voice message via Telegram; voice is transcribed with Whisper and logged automatically
-- **Smart categorization** — Claude classifies entries as moods (`#mood`), events (`#event`), tasks (`- [ ]`), or general notes (`#note`) based on content
+- **Voice logging** — send a voice message and it gets transcribed via whisper and logged automatically
+- **Smart categorization** — the agent classifies entries as moods (`#mood`), events (`#event`), tasks (`- [ ]`), or general notes (`#note`) based on content
 - **Markdown native** — writes directly into weekly journal files (`YYYY-Wxx.md`) under the correct day heading
-- **Date-aware** — every prompt is injected with today's date, current time, week number, and pre-computed file paths so Claude always logs to the right place
-- **Scheduled jobs** — define recurring prompts in `jobs/` (weekly reviews, goal checks, task rollovers) that Claude runs on a cron schedule
-- **Self-scheduling** — Claude can create and manage its own scheduled jobs on request or based on its own insights
-- **Calendar awareness** — optional iCal feeds give Claude a tool to query your upcoming events
-- **Conversation continuity** — per-chat history is persisted to disk with summarized memory so context survives restarts
-- **Fully self-hostable** — runs entirely locally or on your own VPC; no third-party services beyond Telegram and Anthropic/OpenAI
+- **Date-aware** — every prompt is injected with today's date, current time, week number, and pre-computed file paths so the agent always logs to the right place
 
 ## Environment variables
 
@@ -33,11 +28,11 @@ The whole project can be fully hosted locally or on your own VPC.
 | `DEFAULT_CHAT_ID` | No | Telegram chat ID to send proactive/scheduled messages to. Required if you use jobs with `telegram: true` |
 | `ICAL_URLS` | No | Comma-separated iCal feed URLs (Google Calendar, Apple Calendar, etc.). Enables a calendar MCP tool so Claude can query your upcoming events |
 | `ICAL_LABELS` | No | Comma-separated labels for each iCal feed (e.g. `Personal,Work`). Matched by position to `ICAL_URLS` |
-| `CLAUDE_PATH` | No | Path to the Claude Code CLI executable. Defaults to `claude` (assumes it's on your PATH) |
+| `PI_MODEL` | No | Runtime model override in `provider/model-id` form, or an alias such as `gemini`, `sonnet`, `opus`, or `haiku`. Defaults to `openrouter/google/gemini-3.5-flash`; built-in aliases route through OpenRouter |
 
 `BOT_TIMEZONE` is important for journaling accuracy. Without it, "today" and the current time could default to UTC, causing entries to land in the wrong day heading.
 
-`VAULT_PATH` is used both to grant Claude file access and as the base path in the system prompt. Journal files are expected at `$VAULT_PATH/Journal/`.
+`VAULT_PATH` is used both to grant the agent file access and as the base path in the system prompt. Journal files are expected at `$VAULT_PATH/Journal/`.
 
 ## Journal structure
 
@@ -58,7 +53,7 @@ Within a weekly file, content is organized under day headings (`## [[YYYY-MM-DD]
 | Task | `- [ ] <task>` | Action items or things to do |
 | Note | `#note <text>` | Thoughts, ideas, reflections, anything else |
 
-If you would like to modify the vault structure or behavior you can ask claude to update @BOT.md. Be as descriptive as possible with your own journal setup.
+If you would like to modify the vault structure or behavior you can ask the agent to update @BOT.md. Be as descriptive as possible with your own journal setup.
 
 ## Jobs
 
@@ -70,9 +65,9 @@ Jobs are defined as `.md` files in the `jobs/` directory with a YAML frontmatter
 | `cron` | Yes | Cron expression for the schedule |
 | `telegram` | No | Set to `true` to send output to your Telegram chat |
 
-The body of the file is the prompt Claude receives when the job runs.
+The body of the file is the prompt the agent receives when the job runs.
 
-**Suppressing output:** If a job has nothing to report, instruct Claude to output exactly `[SKIP]`. The scheduler will suppress the Telegram message and skip writing that turn to conversation state. Useful for jobs that are only relevant when something actually needs attention.
+**Suppressing output:** If a job has nothing to report, instruct the agent to output exactly `[SKIP]`. The scheduler will suppress the Telegram message and skip writing that turn to conversation state. Useful for jobs that are only relevant when something actually needs attention.
 
 ## Conversation continuity
 
@@ -83,11 +78,11 @@ Each file contains:
 - `messages` for recent user/assistant turns
 - metadata like `version`, `chatId`, and `updatedAt`
 
-Before each Claude call (user message or scheduled job), the bot builds prompt context from the stored summary and recent messages for that chat. This makes follow-up behavior durable across process restarts and enables future jobs to trim or compact older history.
+Before each agent call (user message or scheduled job), the bot builds prompt context from the stored summary and recent messages for that chat. This makes follow-up behavior durable across process restarts and enables future jobs to trim or compact older history.
 
 ## Setup
 
-Run claude code in the directory and type `/setup` and claude will walkthrough environment setup and configurations
+Run the agent in the directory and type `/setup` to walk through environment setup and configuration.
 
 ## Running
 
@@ -95,4 +90,4 @@ Run claude code in the directory and type `/setup` and claude will walkthrough e
 npm start
 ```
 
-Requires [Claude Code CLI](https://github.com/anthropics/claude-code) to be installed and authenticated.
+Requires Pi provider authentication through API keys or Pi's auth storage. For the default Gemini model, set `OPENROUTER_API_KEY`. To try a different provider, set `PI_MODEL=openai/gpt-5-mini` with `OPENAI_API_KEY`, or use another Pi-supported `provider/model-id`.

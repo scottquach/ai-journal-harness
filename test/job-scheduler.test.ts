@@ -4,7 +4,6 @@ import { dirname, basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { loadJobConfigs, parseJobConfig, scheduleJobs } from '../src/job-scheduler.js';
-import type { DispatchTurn } from '../src/dispatch-turn.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -104,7 +103,13 @@ function makeFakeCron() {
   };
 }
 
-test('scheduleJobs throws when dispatchTurn is not provided', () => {
+function makeFakeSend() {
+  const sent: Array<{ id: string; text: string }> = [];
+  const telegramSend = async (id: string, text: string) => { sent.push({ id, text }); };
+  return { sent, telegramSend };
+}
+
+test('scheduleJobs throws when runParentAgent is not provided', () => {
   const fakeCron = makeFakeCron();
   assert.throws(
     () => scheduleJobs('/fake/jobs', {
@@ -112,7 +117,7 @@ test('scheduleJobs throws when dispatchTurn is not provided', () => {
       readdir: () => [],
       readFile: () => '',
     } as unknown as Parameters<typeof scheduleJobs>[1]),
-    /dispatchTurn/,
+    /runParentAgent/,
   );
 });
 
@@ -122,13 +127,12 @@ test('scheduleJobs schedules one cron job per job config', () => {
     'job-b.md': `---\nname: job-b\ncron: "0 18 * * *"\n---\n\nDo B.\n`,
   };
   const fakeCron = makeFakeCron();
-  const dispatchTurn: DispatchTurn = async () => ({ output: 'x', delivered: false, skipped: false });
 
   scheduleJobs('/fake/jobs', {
     cron: fakeCron,
     readdir: () => Object.keys(files),
     readFile: (p) => files[basename(p)] ?? '',
-    dispatchTurn,
+    runParentAgent: async () => ({ output: 'x' }),
   });
 
   assert.equal(fakeCron.scheduled.length, 2);
@@ -136,38 +140,114 @@ test('scheduleJobs schedules one cron job per job config', () => {
   assert.equal(fakeCron.scheduled[1].expression, '0 18 * * *');
 });
 
-test('scheduleJobs forwards job invocations to dispatchTurn with the right metadata', async () => {
+test('scheduleJobs does not send to Telegram when telegram is false', async () => {
   const files: Record<string, string> = {
-    'notify-job.md': `---\nname: notify-job\ncron: "0 9 * * *"\ntelegram: true\n---\n\nDo the thing.\n`,
-    'silent-job.md': `---\nname: silent-job\ncron: "0 18 * * *"\n---\n\nDo it quietly.\n`,
+    'silent-job.md': `---\nname: silent-job\ncron: "0 9 * * *"\n---\n\nDo silently.\n`,
   };
   const fakeCron = makeFakeCron();
-  const calls: Parameters<DispatchTurn>[0][] = [];
-  const dispatchTurn: DispatchTurn = async (input) => {
-    calls.push(input);
-    return { output: 'ok', delivered: true, skipped: false };
-  };
+  const { sent, telegramSend } = makeFakeSend();
 
   scheduleJobs('/fake/jobs', {
     cron: fakeCron,
     readdir: () => Object.keys(files),
     readFile: (p) => files[basename(p)] ?? '',
-    dispatchTurn,
+    runParentAgent: async () => ({ output: 'quiet result' }),
+    telegramSend,
     defaultChatId: '42',
   });
 
   await fakeCron.scheduled[0].callback();
-  await fakeCron.scheduled[1].callback();
 
-  assert.equal(calls.length, 2);
+  assert.equal(sent.length, 0);
+});
 
-  assert.equal(calls[0].source, 'job');
+test('scheduleJobs does not send to Telegram when output contains an exact [SKIP] line', async () => {
+  const files: Record<string, string> = {
+    'skip-job.md': `---\nname: skip-job\ncron: "0 9 * * *"\ntelegram: true\n---\n\nDo something.\n`,
+  };
+  const fakeCron = makeFakeCron();
+  const { sent, telegramSend } = makeFakeSend();
+
+  scheduleJobs('/fake/jobs', {
+    cron: fakeCron,
+    readdir: () => Object.keys(files),
+    readFile: (p) => files[basename(p)] ?? '',
+    runParentAgent: async () => ({ output: 'Checked the context.\n[SKIP]\nNo message needed.' }),
+    telegramSend,
+    defaultChatId: '42',
+  });
+
+  await fakeCron.scheduled[0].callback();
+
+  assert.equal(sent.length, 0);
+});
+
+test('scheduleJobs sends error to Telegram when job fails and telegram is true', async () => {
+  const files: Record<string, string> = {
+    'failing-job.md': `---\nname: failing-job\ncron: "0 9 * * *"\ntelegram: true\n---\n\nDo something.\n`,
+  };
+  const fakeCron = makeFakeCron();
+  const { sent, telegramSend } = makeFakeSend();
+
+  scheduleJobs('/fake/jobs', {
+    cron: fakeCron,
+    readdir: () => Object.keys(files),
+    readFile: (p) => files[basename(p)] ?? '',
+    runParentAgent: async () => { throw new Error('claude exploded'); },
+    telegramSend,
+    defaultChatId: '42',
+  });
+
+  await fakeCron.scheduled[0].callback();
+
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].text, /failing-job.*failed/i);
+  assert.match(sent[0].text, /claude exploded/);
+});
+
+test('scheduleJobs passes job prompt directly to the parent agent', async () => {
+  const files: Record<string, string> = {
+    'context-job.md': `---\nname: context-job\ncron: "0 9 * * *"\ntelegram: false\n---\n\nDo something.\n`,
+  };
+  const fakeCron = makeFakeCron();
+  const calls: any[] = [];
+
+  scheduleJobs('/fake/jobs', {
+    cron: fakeCron,
+    readdir: () => Object.keys(files),
+    readFile: (p) => files[basename(p)] ?? '',
+    runParentAgent: async ({ chatId, jobName, prompt, source }) => {
+      calls.push({ chatId, jobName, prompt, source });
+      return { output: 'job output' };
+    },
+    defaultChatId: '42',
+  });
+
+  await fakeCron.scheduled[0].callback();
+
   assert.equal(calls[0].chatId, '42');
-  assert.equal(calls[0].jobName, 'notify-job');
-  assert.equal(calls[0].deliverTo, '42');
-  assert.equal(calls[0].errorLabel, 'Job "notify-job"');
-  assert.match(calls[0].input, /Do the thing/);
+  assert.equal(calls[0].jobName, 'context-job');
+  assert.equal(calls[0].source, 'job');
+  assert.match(calls[0].prompt, /Do something\./);
+});
 
-  assert.equal(calls[1].jobName, 'silent-job');
-  assert.equal(calls[1].deliverTo, null);
+test('scheduleJobs does not treat inline [SKIP] mentions as skipped output', async () => {
+  const files: Record<string, string> = {
+    'notify-job.md': `---\nname: notify-job\ncron: "0 9 * * *"\ntelegram: true\n---\n\nDo something.\n`,
+  };
+  const fakeCron = makeFakeCron();
+  const { sent, telegramSend } = makeFakeSend();
+
+  scheduleJobs('/fake/jobs', {
+    cron: fakeCron,
+    readdir: () => Object.keys(files),
+    readFile: (p) => files[basename(p)] ?? '',
+    runParentAgent: async () => ({ output: 'This mentions [SKIP] but is a real message.' }),
+    telegramSend,
+    defaultChatId: '42',
+  });
+
+  await fakeCron.scheduled[0].callback();
+
+  assert.equal(sent.length, 1);
 });
