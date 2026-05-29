@@ -80,7 +80,7 @@ function loadBotConfig(botMdPath: string, promptsDir: string, opts: BotConfigLoa
     model: String(frontmatter.model),
     tools: Array.isArray(frontmatter.tools) ? frontmatter.tools.map(String) : [],
     directories: Array.isArray(frontmatter.directories)
-      ? frontmatter.directories.map((d) => expandEnvVars(String(d), env))
+      ? frontmatter.directories.map((d) => expandEnvVars(String(d), env).trim())
       : [],
     systemPrompt: expandEnvVars(prompt, env),
   };

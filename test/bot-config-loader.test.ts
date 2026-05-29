@@ -129,3 +129,25 @@ Files live at \${VAULT_PATH}/Journal.
   assert.deepEqual(config.directories, ['/my/vault']);
   assert.match(config.systemPrompt, /\/my\/vault\/Journal/);
 });
+
+test('loadBotConfig trims expanded directory paths', () => {
+  const botMd = `---\r
+name: journal\r
+model: haiku\r
+directories:\r
+  - \${VAULT_PATH}\r
+---\r
+\r
+Bot instructions here.\r
+`;
+  const files = { '/project/BOT.md': botMd };
+  const readFile = (p) => {
+    if (files[p]) return files[p];
+    throw Object.assign(new Error(), { code: 'ENOENT' });
+  };
+  const readdirSync = () => { throw Object.assign(new Error(), { code: 'ENOENT' }); };
+  const env = { VAULT_PATH: 'C:\\Users\\scott\\Documents\\My Vault\r' };
+
+  const config = loadBotConfig('/project/BOT.md', '/project/prompts', { readFile, readdirSync, env });
+  assert.deepEqual(config.directories, ['C:\\Users\\scott\\Documents\\My Vault']);
+});
